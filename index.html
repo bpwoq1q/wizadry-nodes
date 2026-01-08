@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Tree Planner (Read-only)</title>
+  <style>
+    html,body{height:100%;margin:0;background:#111;color:#eee;font-family:system-ui}
+    #wrap{display:flex;height:100%}
+    #viewer{flex:1;position:relative;overflow:hidden}
+    #side{width:280px;border-left:1px solid #2a2a2a;padding:12px;box-sizing:border-box;overflow:auto}
+    .row{display:flex;align-items:center;gap:8px;margin:8px 0}
+    .hint{font-size:12px;opacity:.75;line-height:1.4}
+    hr{border:0;border-top:1px solid #2a2a2a;margin:12px 0}
+
+    /* SVG 핀 */
+    .pin{cursor:pointer}
+    .r{fill:#d63a3a} .b{fill:#2f6bff} .g{fill:#20a56b}
+    .num{fill:#fff;font-weight:800;font-size:14px;pointer-events:none}
+    .pinHidden{display:none}
+
+    /* 말풍선 */
+    #bubble{
+      position:absolute;
+      min-width: 220px;
+      max-width: 320px;
+      background:#0f0f12;
+      border:1px solid #2b2b38;
+      border-radius:14px;
+      padding:10px;
+      box-shadow:0 10px 30px rgba(0,0,0,.45);
+      display:none;
+      z-index: 30;
+    }
+    #bubbleHeader{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+    #bubbleTitle{font-weight:800}
+    #bubbleClose{
+      border:0;background:transparent;color:#fff;font-size:18px;cursor:pointer;line-height:1;
+      opacity:.85;
+    }
+    #bubbleClose:hover{opacity:1}
+    #bubbleDesc{white-space:pre-wrap;line-height:1.35;font-size:13px;opacity:.95}
+    #bubbleLink{display:none;margin-top:8px;font-size:12px}
+    #bubbleLink a{color:#9ecbff}
+  </style>
+</head>
+<body>
+<div id="wrap">
+  <div id="viewer">
+    <svg id="svg" width="100%" height="100%" viewBox="0 0 2048 2048">
+      <image id="bg" href="tree.png" x="0" y="0" width="2048" height="2048"></image>
+      <g id="pins"></g>
+    </svg>
+
+    <div id="bubble" aria-hidden="true">
+      <div id="bubbleHeader">
+        <div id="bubbleTitle"></div>
+        <button id="bubbleClose" type="button" title="닫기">×</button>
+      </div>
+      <div id="bubbleDesc"></div>
+      <div id="bubbleLink"></div>
+    </div>
+  </div>
+
+  <aside id="side">
+    <div class="row"><b id="counter">노드: 0</b></div>
+
+    <hr/>
+
+    <div><b>필터</b></div>
+    <div class="row"><input type="checkbox" id="f-r" checked><label for="f-r">빨강</label></div>
+    <div class="row"><input type="checkbox" id="f-b" checked><label for="f-b">파랑</label></div>
+    <div class="row"><input type="checkbox" id="f-g" checked><label for="f-g">초록</label></div>
+
+    <hr/>
+
+    <div><b>핀 크기</b></div>
+    <div class="row">
+      <input type="range" id="pinSize" min="10" max="80" step="1" style="width:180px" />
+      <span id="pinSizeVal" style="width:40px;text-align:right;"></span>
+    </div>
+
+    <hr/>
+
+    <div class="hint">
+      • 이 페이지는 <b>읽기 전용</b>이라 노드 추가/편집/저장은 불가.<br/>
+      • 노드 데이터는 같은 폴더의 <b>nodes.json</b>에서 읽어옵니다.<br/>
+      • nodes.json이 없으면(또는 로컬에서 file://로 열면) 기존 에디터가 저장한 localStorage 데이터를 '읽기만' 시도합니다.
+    </div>
+  </aside>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+
+<script>
+window.addEventListener('DOMContentLoaded', async () => {
+  const svg = document.getElementById("svg");
+  const bg  = document.getElementById("bg");
+  const pins = document.getElementById("pins");
+  const viewer = document.getElementById("viewer");
+
+  const bubble = document.getElementById("bubble");
+  const bubbleTitle = document.getElementById("bubbleTitle");
+  const bubbleDesc = document.getElementById("bubbleDesc");
+  const bubbleClose = document.getElementById("bubbleClose");
+  const bubbleLink = document.getElementById("bubbleLink");
+
+  // --- 이미지 크기 자동 감지 ---
+  function applyImageSize(w, h){
+    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+    bg.setAttribute("width", w);
+    bg.setAttribute("height", h);
+  }
+
+  // 로드된 이미지 크기 감지(가능하면 naturalWidth/Height 사용)
+  async function detectImageSize(){
+    return await new Promise((resolve) => {
+      const probe = new Image();
+      const href = bg.getAttribute("href") || (bg.href && bg.href.baseVal) || "tree.png";
+      probe.onload = () => resolve({w: probe.naturalWidth || 2048, h: probe.naturalHeight || 2048});
+      probe.onerror = () => resolve({w: 2048, h: 2048});
+      probe.src = href;
+    });
+  }
+
+  // --- 노드 로드: nodes.json -> localStorage(읽기만) -> 빈 배열 ---
+  const STORAGE_KEY_NODES = "daphne_tree_nodes_v1";
+
+  function normalizeNodes(arr){
+    if(!Array.isArray(arr)) return [];
+    return arr.map(n => ({
+      id: String(n.id ?? ""),
+      x: Number(n.x),
+      y: Number(n.y),
+      c: (n.c==="r"||n.c==="b"||n.c==="g") ? n.c : "r",
+      n: Number.isFinite(Number(n.n)) ? Number(n.n) : 1,
+      title: n.title ? String(n.title) : "",
+      desc: n.desc ? String(n.desc) : "",
+      link: n.link ? String(n.link) : ""
+    })).filter(n => n.id && Number.isFinite(n.x) && Number.isFinite(n.y));
+  }
+
+  async function loadNodes(){
+    // 1) nodes.json
+    try{
+      const res = await fetch("nodes.json", {cache:"no-store"});
+      if(res.ok){
+        const data = await res.json();
+        const nodes = normalizeNodes(data);
+        if(nodes.length) return nodes;
+      }
+    }catch(e){}
+
+    // 2) localStorage (읽기만)
+    try{
+      const raw = localStorage.getItem(STORAGE_KEY_NODES);
+      if(raw){
+        const arr = JSON.parse(raw);
+        const nodes = normalizeNodes(arr);
+        if(nodes.length) return nodes;
+      }
+    }catch(e){}
+
+    return [];
+  }
+
+  // --- UI: 핀 크기 ---
+  const PIN_RADIUS_KEY = "planner_pin_radius";
+  let pinRadius = Number(localStorage.getItem(PIN_RADIUS_KEY) || 32);
+  const pinSize = document.getElementById("pinSize");
+  const pinSizeVal = document.getElementById("pinSizeVal");
+  pinSize.value = String(pinRadius);
+  pinSizeVal.textContent = String(pinRadius);
+
+  pinSize.addEventListener("input", () => {
+    pinRadius = Number(pinSize.value);
+    pinSizeVal.textContent = String(pinRadius);
+    // 읽기전용이지만, 핀 크기 정도는 "내 화면" 편의라 저장 허용
+    try{ localStorage.setItem(PIN_RADIUS_KEY, String(pinRadius)); }catch(e){}
+    render();
+  });
+
+  // --- 말풍선 ---
+  function hideBubble(){
+    bubble.style.display = "none";
+    bubble.setAttribute("aria-hidden", "true");
+  }
+
+  function showBubbleForNode(node){
+    bubbleTitle.textContent = node.title || node.id;
+    bubbleDesc.textContent = node.desc || "";
+
+    if(node.link){
+      bubbleLink.style.display = "block";
+      bubbleLink.innerHTML = `<a href="${node.link}" target="_blank" rel="noopener noreferrer">관련 링크 열기</a>`;
+    }else{
+      bubbleLink.style.display = "none";
+      bubbleLink.innerHTML = "";
+    }
+
+    // 노드 좌표를 화면 좌표로 변환해서 말풍선 위치 잡기
+    const viewport = svg.querySelector(".svg-pan-zoom_viewport") || svg;
+    const pt = svg.createSVGPoint();
+    pt.x = node.x; pt.y = node.y;
+    const screen = pt.matrixTransform(viewport.getScreenCTM());
+    const rect = viewer.getBoundingClientRect();
+
+    // viewer 기준 좌표
+    let left = (screen.x - rect.left) + 14;
+    let top  = (screen.y - rect.top) + 14;
+
+    // 화면 밖으로 나가면 보정
+    const bw = 320;
+    const bh = 180;
+    left = Math.max(8, Math.min(left, rect.width - bw - 8));
+    top  = Math.max(8, Math.min(top, rect.height - bh - 8));
+
+    bubble.style.left = left + "px";
+    bubble.style.top  = top + "px";
+    bubble.style.display = "block";
+    bubble.setAttribute("aria-hidden", "false");
+  }
+
+  bubbleClose.addEventListener("click", hideBubble);
+
+  // --- 필터 ---
+  function filters(){
+    return {
+      r: document.getElementById("f-r").checked,
+      b: document.getElementById("f-b").checked,
+      g: document.getElementById("f-g").checked,
+    };
+  }
+  ["f-r","f-b","f-g"].forEach(id => {
+    document.getElementById(id).addEventListener("change", () => { render(); hideBubble(); });
+  });
+
+  // --- 렌더 ---
+  let NODES = [];
+
+  function updateCounter(){
+    document.getElementById("counter").textContent = `노드: ${NODES.length}`;
+  }
+
+  function render(){
+    const f = filters();
+    pins.innerHTML = "";
+
+    for(const node of NODES){
+      const g = document.createElementNS("http://www.w3.org/2000/svg","g");
+      g.classList.add("pin");
+      g.dataset.id = node.id;
+      g.dataset.c = node.c;
+      if(!f[node.c]) g.classList.add("pinHidden");
+
+      const circle = document.createElementNS("http://www.w3.org/2000/svg","circle");
+      circle.setAttribute("cx", node.x);
+      circle.setAttribute("cy", node.y);
+      circle.setAttribute("r", pinRadius);
+      circle.classList.add(node.c);
+
+      const text = document.createElementNS("http://www.w3.org/2000/svg","text");
+      text.setAttribute("x", node.x);
+      text.setAttribute("y", node.y + 5);
+      text.setAttribute("text-anchor","middle");
+      text.classList.add("num");
+      text.textContent = node.n;
+
+      // 접근성/툴팁용 title
+      if(node.title){
+        const t = document.createElementNS("http://www.w3.org/2000/svg","title");
+        t.textContent = node.title;
+        g.appendChild(t);
+      }
+
+      g.appendChild(circle);
+      g.appendChild(text);
+
+      g.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        showBubbleForNode(node);
+      });
+
+      pins.appendChild(g);
+    }
+
+    updateCounter();
+  }
+
+  // 배경 클릭하면 말풍선 닫기
+  svg.addEventListener("click", () => hideBubble());
+
+  // 줌/패닝: 더블클릭 확대 OFF + 줌/패닝 중 말풍선 닫기
+  const panZoom = svgPanZoom("#svg", {
+    zoomEnabled: true,
+    controlIconsEnabled: true,
+    fit: true,
+    center: true,
+    onPan: hideBubble,
+    onZoom: hideBubble,
+    minZoom: 0.3,
+    maxZoom: 10,
+    dblClickZoomEnabled: false
+  });
+
+  // nodes / image init
+  const sz = await detectImageSize();
+  applyImageSize(sz.w, sz.h);
+
+  NODES = await loadNodes();
+  render();
+});
+</script>
+</body>
+</html>
