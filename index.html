@@ -8,7 +8,7 @@
     :root{color-scheme:dark}
     html,body{height:100%;margin:0;background:#0b0b0e;color:#eee;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
     #wrap{display:flex;height:100vh;overflow:hidden}
-    #viewer{flex:1;position:relative;min-width:0;touch-action:none;} /* 모바일 제스처는 svg-pan-zoom이 처리 */
+    #viewer{flex:1;position:relative;min-width:0;touch-action:none;}
     #side{
       width:320px; max-width:48vw;
       border-left:1px solid #242433;
@@ -39,10 +39,10 @@
     .num{fill:#fff;font-weight:900;font-size:15px;pointer-events:none}
     .pin circle{stroke:rgba(255,255,255,.85);stroke-width:2.4}
 
-    /* 툴팁 */
+    /* 툴팁(크기/글자 크게) */
     .tip-box{fill:rgba(15,15,20,.92);stroke:rgba(255,255,255,.25);stroke-width:1}
-    .tip-title{fill:#fff;font-weight:900;font-size:14px}
-    .tip-text{fill:rgba(255,255,255,.9);font-size:12px}
+    .tip-title{fill:#fff;font-weight:900;font-size:18px}
+    .tip-text{fill:rgba(255,255,255,.92);font-size:15px}
   </style>
 </head>
 
@@ -53,20 +53,17 @@
       <image id="bg" href="tree.png" x="0" y="0" width="2996" height="2832" />
       <g id="pins"></g>
 
-      <!-- SVG 내부 툴팁(좌표계 동일 -> 절대 안 어긋남) -->
       <defs>
-        <!-- 텍스트가 박스 밖으로 나가도 깔끔하게 잘리게(안전장치) -->
         <clipPath id="tipClip">
-          <rect id="tipClipRect" x="0" y="0" rx="10" ry="10" width="280" height="80"></rect>
+          <rect id="tipClipRect" x="0" y="0" rx="12" ry="12" width="420" height="120"></rect>
         </clipPath>
       </defs>
 
       <g id="tooltip" visibility="hidden">
-        <rect id="tipRect" class="tip-box" x="0" y="0" rx="10" ry="10" width="280" height="80"></rect>
-
+        <rect id="tipRect" class="tip-box" x="0" y="0" rx="12" ry="12" width="420" height="120"></rect>
         <g clip-path="url(#tipClip)">
-          <text id="tipTitle" class="tip-title" x="12" y="10" dominant-baseline="hanging"></text>
-          <text id="tipText" class="tip-text" x="12" y="30" dominant-baseline="hanging"></text>
+          <text id="tipTitle" class="tip-title" x="16" y="12" dominant-baseline="hanging"></text>
+          <text id="tipText" class="tip-text" x="16" y="44" dominant-baseline="hanging"></text>
         </g>
       </g>
     </svg>
@@ -101,13 +98,26 @@
 <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
 
 <script>
-  // === 이미지 크기 ===
   const IMG_W = 2996, IMG_H = 2832;
-
-  // === 핀 기본 크기(요구: 좀 더 크게) ===
   const DEFAULT_PIN_R = 18;
 
-  // --- svg-pan-zoom 모바일 터치 핸들러(Hammer.js) ---
+  // 툴팁 크기/타이포 (원하면 여기 숫자만 조절하면 됨)
+  const TIP = {
+    w: 420,
+    padX: 16,
+    titleY: 12,
+    textY: 44,
+    // 줄바꿈 기준(글자수). 폰트 크게 했으니 더 적게.
+    wrapLen: 28,
+    maxLines: 7,
+    // 높이 계산: 기본 + 줄수*라인높이
+    baseH: 56,
+    lineH: 22,
+    // 노드에서 떨어진 거리
+    offsetX: 26,
+    offsetY: -18
+  };
+
   const eventsHandler = {
     haltEventListeners: ['touchstart','touchend','touchmove','touchleave','touchcancel'],
     init: function(options) {
@@ -117,8 +127,6 @@
 
       this.hammer = new Hammer(options.svgElement, { inputClass: Hammer.TouchInput });
       this.hammer.get('pinch').set({ enable: true });
-
-      // 더블탭 확대 비활성(요구사항)
       const dbl = this.hammer.get('doubletap');
       if (dbl) dbl.set({ enable: false });
 
@@ -133,7 +141,6 @@
         instance.zoomAtPoint(initialScale * ev.scale, { x: ev.center.x, y: ev.center.y });
       });
 
-      // 페이지 스크롤 방지(캔버스 영역에서)
       options.svgElement.addEventListener('touchmove', function(e){ e.preventDefault(); }, { passive:false });
     },
     destroy: function(){ this.hammer && this.hammer.destroy(); }
@@ -158,7 +165,6 @@
   window.addEventListener('load', () => { forceFitCenter(); setTimeout(forceFitCenter, 150); setTimeout(forceFitCenter, 450); });
   window.addEventListener('resize', () => { forceFitCenter(); });
 
-  // --- nodes.json 로드 ---
   async function loadNodes() {
     const res = await fetch('nodes.json', { cache: 'no-store' });
     const data = await res.json();
@@ -169,6 +175,7 @@
 
   const svg = document.getElementById('svg');
   const pinsEl = document.getElementById('pins');
+
   const tip = document.getElementById('tooltip');
   const tipRect = document.getElementById('tipRect');
   const tipClipRect = document.getElementById('tipClipRect');
@@ -176,12 +183,8 @@
   const tipText = document.getElementById('tipText');
 
   function setTipVisible(v){ tip.setAttribute('visibility', v ? 'visible' : 'hidden'); }
+  function clearText(el){ while (el.firstChild) el.removeChild(el.firstChild); }
 
-  function clearText(el){
-    while (el.firstChild) el.removeChild(el.firstChild);
-  }
-
-  // 긴 문장 줄바꿈(간단)
   function wrapText(str, maxLen) {
     if (!str) return [''];
     const rawLines = String(str).split('\n');
@@ -198,7 +201,6 @@
     return out;
   }
 
-  // tspan 라인 생성(중요: rect 위치/텍스트 x,y 지정 "후"에 생성해서 첫 클릭에도 안 튐)
   function setMultilineText(textEl, x, y, lines) {
     textEl.setAttribute('x', x);
     textEl.setAttribute('y', y);
@@ -207,7 +209,6 @@
     lines.forEach((ln, i) => {
       const tspan = document.createElementNS('http://www.w3.org/2000/svg','tspan');
       tspan.setAttribute('x', x);
-      // dominant-baseline이 hanging이라 dy는 em 기준으로 내려주기만 하면 됨
       tspan.setAttribute('dy', i === 0 ? '0' : '1.25em');
       tspan.textContent = ln;
       textEl.appendChild(tspan);
@@ -218,24 +219,20 @@
     const title = node.name || node.title || '(제목 없음)';
     const desc = node.desc || node.detail || node.description || '';
 
-    // 라인 준비
-    const lines = wrapText(desc, 26).slice(0, 6);
+    const lines = wrapText(desc, TIP.wrapLen).slice(0, TIP.maxLines);
     const lineCount = Math.max(1, lines.length);
 
-    // 박스 크기
-    const w = 300;
-    const h = 36 + (lineCount * 16);
+    const w = TIP.w;
+    const h = TIP.baseH + (lineCount * TIP.lineH);
 
-    // 위치 계산 + 화면 클램프
-    let x = node.x + 24;
-    let y = node.y - 16;
+    let x = node.x + TIP.offsetX;
+    let y = node.y + TIP.offsetY;
 
-    if (x + w > IMG_W) x = node.x - w - 24;
-    if (x < 8) x = 8;
-    if (y + h > IMG_H) y = IMG_H - h - 8;
-    if (y < 8) y = 8;
+    if (x + w > IMG_W) x = node.x - w - TIP.offsetX;
+    if (x < 10) x = 10;
+    if (y + h > IMG_H) y = IMG_H - h - 10;
+    if (y < 10) y = 10;
 
-    // 박스/클립 동기화
     tipRect.setAttribute('x', x);
     tipRect.setAttribute('y', y);
     tipRect.setAttribute('width', w);
@@ -246,14 +243,12 @@
     tipClipRect.setAttribute('width', w);
     tipClipRect.setAttribute('height', h);
 
-    // 텍스트는 "위치 지정 후" 라인 생성 (첫 클릭 튐 해결)
     clearText(tipTitle);
     tipTitle.textContent = title;
-    tipTitle.setAttribute('x', x + 12);
-    tipTitle.setAttribute('y', y + 10);
+    tipTitle.setAttribute('x', x + TIP.padX);
+    tipTitle.setAttribute('y', y + TIP.titleY);
 
-    setMultilineText(tipText, x + 12, y + 30, lines);
-
+    setMultilineText(tipText, x + TIP.padX, y + TIP.textY, lines);
     setTipVisible(true);
   }
 
@@ -274,7 +269,7 @@
     if (t !== '') {
       const text = document.createElementNS('http://www.w3.org/2000/svg','text');
       text.setAttribute('x', node.x);
-      text.setAttribute('y', node.y + 5);
+      text.setAttribute('y', node.y + 6);
       text.setAttribute('text-anchor','middle');
       text.classList.add('num');
       text.textContent = t;
@@ -283,13 +278,11 @@
 
     g.insertBefore(circle, g.firstChild);
 
-    // 클릭/탭: 말풍선 표시
     g.addEventListener('click', (ev) => {
       ev.stopPropagation();
       showTooltipAt(node);
     }, { passive: true });
 
-    // 모바일 일부 기기 click 씹힘 대비
     g.addEventListener('touchend', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
@@ -310,24 +303,16 @@
     });
   }
 
-  // 빈 곳 탭/클릭하면 닫기
   svg.addEventListener('click', () => hideTooltip(), { passive:true });
   svg.addEventListener('touchend', () => hideTooltip(), { passive:true });
 
   document.getElementById('btnFit').addEventListener('click', () => { hideTooltip(); forceFitCenter(); });
   document.getElementById('btnCloseTip').addEventListener('click', () => hideTooltip());
-
   ['f-r','f-b','f-g'].forEach(id => document.getElementById(id).addEventListener('change', applyFilter));
 
   (async function init(){
     let nodes = [];
-    try{
-      nodes = await loadNodes();
-    }catch(e){
-      console.error(e);
-      nodes = [];
-    }
-
+    try{ nodes = await loadNodes(); }catch(e){ console.error(e); nodes = []; }
     document.getElementById('count').textContent = `노드: ${nodes.length}`;
 
     pinsEl.innerHTML = '';
