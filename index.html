@@ -6,345 +6,368 @@
   <title>Wizardry Nodes (Read-only)</title>
   <style>
     :root{
-      --bg:#0f0f12;
-      --panel:#111118;
-      --line:#2a2a33;
-      --text:#e9e9ef;
-      --muted:#a7a7b7;
-      --accent:#5b8cff;
-      --radius:14px;
+      --bg:#0f0f12; --panel:#0f0f12; --border:#262630; --text:#eee;
+      --muted:rgba(255,255,255,.7);
     }
     html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
-    #wrap{height:100%;display:flex;flex-direction:column;}
-    #viewer{position:relative;flex:1;min-height:0;overflow:hidden;background:#000;}
-    #svg{width:100%;height:100%;display:block;touch-action:none;} /* let svg-pan-zoom handle */
+    #wrap{display:flex; height:100vh; height:100dvh;}
+    #viewer{flex:1; position:relative; overflow:hidden; min-width:0;}
+    #side{
+      width:320px; max-width:45vw;
+      border-left:1px solid var(--border);
+      background:var(--panel);
+      box-sizing:border-box;
+      padding:12px;
+      overflow:auto;
+    }
+    #map{width:100%;height:100%;}
+    .row{display:flex;align-items:center;gap:8px;margin:8px 0;}
+    .hint{font-size:12px; color:var(--muted); line-height:1.35;}
+    h3{margin:10px 0 6px; font-size:13px; font-weight:800; color:#cfcfe8;}
+    hr{border:0;border-top:1px solid var(--border); margin:12px 0;}
 
-    /* Floating button to open panel (mobile-friendly) */
-    #openPanel{
-      position:absolute;right:12px;top:12px;z-index:30;
-      background:rgba(20,20,26,.85);
-      border:1px solid rgba(255,255,255,.12);
-      color:var(--text);
-      padding:10px 12px;border-radius:999px;
-      font-weight:700;font-size:13px;
-      backdrop-filter: blur(8px);
-    }
-    #openPanel:active{transform:translateY(1px);}
-
-    /* Bottom drawer panel */
-    #panel{
-      position:fixed;
-      left:0; right:0; bottom:0;
-      z-index:40;
-      background:rgba(17,17,24,.92);
-      border-top:1px solid rgba(255,255,255,.10);
-      backdrop-filter: blur(10px);
-      border-top-left-radius: var(--radius);
-      border-top-right-radius: var(--radius);
-      box-shadow: 0 -10px 30px rgba(0,0,0,.35);
-      max-height: 65vh;
-      transform: translateY(calc(100% - 56px));
-      transition: transform .22s ease;
-      padding-bottom: env(safe-area-inset-bottom);
-    }
-    #panel.open{ transform: translateY(0); }
-    #panelHeader{
-      height:56px;display:flex;align-items:center;justify-content:space-between;
-      padding:0 14px;box-sizing:border-box;
-      user-select:none;
-    }
-    #grab{
-      width:48px;height:5px;border-radius:999px;background:rgba(255,255,255,.25);
-      margin:8px auto 0;
-    }
-    #panelTitle{font-weight:800;font-size:14px;}
-    #closePanel{
-      background:transparent;border:0;color:var(--text);
-      font-size:22px;line-height:1; padding:6px 10px; border-radius:10px;
-    }
-    #closePanel:active{background:rgba(255,255,255,.08);}
-    #panelBody{padding:8px 16px 16px;}
-    .row{display:flex;align-items:center;gap:10px;margin:10px 0;}
-    .muted{color:var(--muted);font-size:12px;line-height:1.4;}
-    .pill{
-      display:inline-flex;align-items:center;gap:8px;
-      padding:8px 10px;border-radius:999px;
-      border:1px solid rgba(255,255,255,.12);
-      background:rgba(0,0,0,.18);
-      font-size:12px;
+    /* Responsive: 모바일에서는 사이드바를 아래로 */
+    @media (max-width: 900px){
+      #wrap{flex-direction:column;}
+      #side{
+        width:100%;
+        max-width:none;
+        border-left:none;
+        border-top:1px solid var(--border);
+        padding:10px 12px;
+        max-height:40vh;
+      }
+      #viewer{height:60vh;}
     }
 
-    /* Tooltip bubble */
-    #tip{
-      position:absolute;
-      z-index:35;
-      max-width:min(320px, calc(100vw - 24px));
-      background:rgba(15,15,20,.94);
-      border:1px solid rgba(255,255,255,.14);
-      border-radius:14px;
-      padding:10px 12px;
-      box-shadow: 0 10px 30px rgba(0,0,0,.4);
-      backdrop-filter: blur(10px);
-      display:none;
-    }
-    #tip h4{margin:0 0 6px 0;font-size:14px;}
-    #tip p{margin:0;font-size:12px;color:var(--muted);white-space:pre-wrap;}
-    #tipClose{
-      position:absolute;right:8px;top:6px;
-      border:0;background:transparent;color:var(--muted);
-      font-size:18px;line-height:1;padding:4px 6px;border-radius:10px;
-    }
-    #tipClose:active{background:rgba(255,255,255,.08);}
-
-    /* SVG pins */
+    /* Pins (SVG) */
     .pin{cursor:pointer}
     .r{fill:#d63a3a} .b{fill:#2f6bff} .g{fill:#20a56b}
-    .ring{stroke:rgba(255,255,255,.92);stroke-width:2}
-    .num{fill:#fff;font-weight:800;font-size:14px;pointer-events:none}
-    .hidden{display:none}
+    .num{fill:#fff;font-weight:900;font-size:14px;pointer-events:none}
+    .ring{stroke:rgba(255,255,255,.9);stroke-width:2}
+
+    /* Tooltip bubble */
+    #tooltip{
+      position:absolute;
+      z-index:10;
+      min-width:180px;
+      max-width:min(320px, 80vw);
+      background:rgba(20,20,26,.96);
+      border:1px solid rgba(255,255,255,.12);
+      border-radius:14px;
+      padding:10px 12px;
+      box-shadow:0 10px 30px rgba(0,0,0,.45);
+      backdrop-filter: blur(6px);
+      display:none;
+    }
+    #tooltip .t{font-weight:900; font-size:14px; margin-bottom:6px;}
+    #tooltip .d{font-size:12px; color:rgba(255,255,255,.82); white-space:pre-wrap;}
+    #tooltip .x{
+      position:absolute; top:6px; right:8px;
+      width:28px; height:28px; border-radius:999px;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.06);
+      color:#fff; cursor:pointer;
+    }
+
+    /* Small controls */
+    .btn{
+      display:inline-flex; align-items:center; justify-content:center;
+      padding:6px 10px;
+      border-radius:12px;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.06);
+      color:#eee;
+      cursor:pointer;
+      font-size:12px;
+      user-select:none;
+    }
+    .btn:active{transform:translateY(1px);}
+    .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;opacity:.85;border:1px solid rgba(255,255,255,.14);padding:1px 6px;border-radius:8px;}
   </style>
 </head>
 <body>
 <div id="wrap">
   <div id="viewer">
-    <button id="openPanel" type="button">필터/정보</button>
-    <div id="tip" role="dialog" aria-label="노드 정보">
-      <button id="tipClose" type="button" aria-label="닫기">×</button>
-      <h4 id="tipTitle"></h4>
-      <p id="tipBody"></p>
-    </div>
+    <div id="map"></div>
 
-    <svg id="svg" viewBox="0 0 2996 2832" xmlns="http://www.w3.org/2000/svg">
-      <image id="bg" href="tree.png" x="0" y="0" width="2996" height="2832" />
-      <g id="pins"></g>
-    </svg>
+    <div id="tooltip" role="dialog" aria-modal="false">
+      <button class="x" id="ttClose" aria-label="닫기">✕</button>
+      <div class="t" id="ttTitle"></div>
+      <div class="d" id="ttDesc"></div>
+    </div>
   </div>
 
-  <div id="panel" aria-label="옵션 패널">
-    <div id="grab"></div>
-    <div id="panelHeader">
-      <div id="panelTitle">노드: <span id="nodeCount">0</span></div>
-      <button id="closePanel" type="button" aria-label="패널 닫기">⌄</button>
+  <aside id="side">
+    <div class="row"><b id="counter">노드: 0</b></div>
+
+    <div class="row">
+      <button class="btn" id="btnFit">화면에 맞춤</button>
+      <button class="btn" id="btnHideTip">말풍선 닫기</button>
     </div>
-    <div id="panelBody">
-      <div class="row">
-        <span class="pill">✅ 빨강 <input type="checkbox" id="f-r" checked></span>
-        <span class="pill">✅ 파랑 <input type="checkbox" id="f-b" checked></span>
-        <span class="pill">✅ 초록 <input type="checkbox" id="f-g" checked></span>
-      </div>
-      <div class="muted">
-        • 노드 누르면 말풍선으로 제목/상세가 뜹니다.<br>
-        • 화면 드래그: 이동 / 핀치: 확대·축소<br>
-        • 말풍선이 거슬리면 X로 닫거나, 빈 곳을 눌러 닫으세요.
-      </div>
+
+    <hr/>
+
+    <h3>필터</h3>
+    <div class="row"><input type="checkbox" id="f-r" checked> <label for="f-r">빨강</label></div>
+    <div class="row"><input type="checkbox" id="f-b" checked> <label for="f-b">파랑</label></div>
+    <div class="row"><input type="checkbox" id="f-g" checked> <label for="f-g">초록</label></div>
+
+    <hr/>
+    <div class="hint">
+      • 노드 탭하면 제목/설명 말풍선이 떠.<br/>
+      • PC에서 스크롤 줌 가능, 드래그로 이동 가능.<br/>
+      • 모바일에서 두 손가락으로 확대/이동 가능.<br/>
+      • 잘 안 맞으면 <span class="kbd">화면에 맞춤</span> 눌러.
     </div>
-  </div>
+  </aside>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
+
 <script>
 (() => {
-  const IMG_W = 2996, IMG_H = 2832;
-  const svg = document.getElementById('svg');
-  const pinsLayer = document.getElementById('pins');
+  const IMG_W = 2996;
+  const IMG_H = 2832;
+  const TREE_SRC = "tree.png";
+  const NODES_SRC = "nodes.json";
 
-  // Panel controls
-  const panel = document.getElementById('panel');
-  const openPanelBtn = document.getElementById('openPanel');
-  const closePanelBtn = document.getElementById('closePanel');
-  openPanelBtn.addEventListener('click', () => panel.classList.toggle('open'));
-  closePanelBtn.addEventListener('click', () => panel.classList.toggle('open'));
-  // tap grab area to toggle
-  document.getElementById('panelHeader').addEventListener('click', (e) => {
-    if (e.target === closePanelBtn) return;
-    panel.classList.toggle('open');
-  });
+  const mapEl = document.getElementById("map");
+  const counterEl = document.getElementById("counter");
 
-  // Tooltip
-  const tip = document.getElementById('tip');
-  const tipTitle = document.getElementById('tipTitle');
-  const tipBody = document.getElementById('tipBody');
-  const tipClose = document.getElementById('tipClose');
-  function hideTip(){ tip.style.display='none'; }
-  tipClose.addEventListener('click', hideTip);
-  // click outside tooltip to close (but not when clicking panel)
-  document.getElementById('viewer').addEventListener('pointerdown', (e) => {
-    if (tip.style.display !== 'none') {
-      const inside = tip.contains(e.target);
-      const onPanelBtn = openPanelBtn.contains(e.target);
-      if (!inside && !onPanelBtn) hideTip();
-    }
-  }, {capture:true});
+  const tooltip = document.getElementById("tooltip");
+  const ttTitle = document.getElementById("ttTitle");
+  const ttDesc  = document.getElementById("ttDesc");
+  const btnFit  = document.getElementById("btnFit");
+  const btnHideTip = document.getElementById("btnHideTip");
 
-  // Load nodes
-  let NODES = [];
+  const fR = document.getElementById("f-r");
+  const fB = document.getElementById("f-b");
+  const fG = document.getElementById("f-g");
+
+  function esc(s){
+    return (s ?? "").toString()
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#39;");
+  }
+
   async function loadNodes(){
     try{
-      const res = await fetch('nodes.json', {cache: 'no-store'});
-      if(!res.ok) throw new Error('nodes.json fetch failed: ' + res.status);
+      const res = await fetch(NODES_SRC, {cache:"no-store"});
       const data = await res.json();
-      if(Array.isArray(data)) NODES = data;
-      else if(Array.isArray(data.nodes)) NODES = data.nodes;
-      else NODES = [];
-    }catch(err){
-      console.error(err);
-      NODES = [];
+      if (Array.isArray(data)) return data;
+      if (data && Array.isArray(data.nodes)) return data.nodes;
+      return [];
+    }catch(e){
+      console.warn("nodes.json load failed:", e);
+      return [];
     }
-    document.getElementById('nodeCount').textContent = String(NODES.length);
   }
 
-  function filters(){
-    return {
-      r: document.getElementById('f-r').checked,
-      b: document.getElementById('f-b').checked,
-      g: document.getElementById('f-g').checked
+  function getFilters(){
+    return { r: fR.checked, b: fB.checked, g: fG.checked };
+  }
+
+  function hideTooltip(){
+    tooltip.style.display = "none";
+  }
+
+  function showTooltipAt(x, y, title, desc){
+    ttTitle.textContent = title || "";
+    ttDesc.textContent  = desc  || "";
+    tooltip.style.display = "block";
+
+    // position relative to viewer
+    const viewerRect = document.getElementById("viewer").getBoundingClientRect();
+    const pad = 10;
+
+    // default offset
+    let left = x + 14;
+    let top  = y + 14;
+
+    // measure
+    tooltip.style.left = "0px";
+    tooltip.style.top  = "0px";
+    const w = tooltip.offsetWidth;
+    const h = tooltip.offsetHeight;
+
+    // clamp within viewer
+    if (left + w > viewerRect.width - pad) left = x - w - 14;
+    if (top + h > viewerRect.height - pad) top = y - h - 14;
+    left = Math.max(pad, Math.min(left, viewerRect.width - w - pad));
+    top  = Math.max(pad, Math.min(top,  viewerRect.height - h - pad));
+
+    tooltip.style.left = left + "px";
+    tooltip.style.top  = top + "px";
+  }
+
+  function pointToViewerPx(svgEl, svgPoint){
+    // svgPoint is in SVG user units; convert to screen px and then to viewer-relative px
+    const pt = svgEl.createSVGPoint();
+    pt.x = svgPoint.x; pt.y = svgPoint.y;
+    const screen = pt.matrixTransform(svgEl.getScreenCTM());
+    const viewerRect = document.getElementById("viewer").getBoundingClientRect();
+    return { x: screen.x - viewerRect.left, y: screen.y - viewerRect.top };
+  }
+
+  function createSvg(){
+    const svgNS = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(svgNS, "svg");
+    svg.id = "svg";
+    svg.setAttribute("width", "100%");
+    svg.setAttribute("height", "100%");
+    svg.setAttribute("viewBox", `0 0 ${IMG_W} ${IMG_H}`);
+    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
+    svg.style.touchAction = "none";
+
+    const img = document.createElementNS(svgNS, "image");
+    img.setAttribute("href", TREE_SRC);
+    img.setAttribute("x", "0");
+    img.setAttribute("y", "0");
+    img.setAttribute("width", IMG_W);
+    img.setAttribute("height", IMG_H);
+    img.setAttribute("id", "bg");
+    svg.appendChild(img);
+
+    const pins = document.createElementNS(svgNS, "g");
+    pins.setAttribute("id", "pins");
+    svg.appendChild(pins);
+
+    mapEl.innerHTML = "";
+    mapEl.appendChild(svg);
+
+    // Disable native dblclick zoom behavior
+    svg.addEventListener("dblclick", (e) => { e.preventDefault(); e.stopPropagation(); }, {passive:false});
+
+    // Click outside nodes closes tooltip
+    svg.addEventListener("pointerdown", (e) => {
+      // if clicking background or empty area, close tooltip
+      if (!e.target.closest || !e.target.closest(".pin")) hideTooltip();
+    });
+
+    return { svg, pins, img };
+  }
+
+  function renderPins(svg, pins, nodes){
+    pins.innerHTML = "";
+    const svgNS = "http://www.w3.org/2000/svg";
+    const f = getFilters();
+
+    for(const node of nodes){
+      const id = node.id ?? "";
+      const c  = (node.c ?? node.color ?? "r").toString().toLowerCase();
+      const n  = (node.n ?? "").toString();
+      const title = node.name ?? node.title ?? "";
+      const desc  = node.desc ?? node.description ?? node.effect ?? "";
+
+      if (!f[c]) continue;
+
+      const g = document.createElementNS(svgNS, "g");
+      g.classList.add("pin");
+      g.dataset.id = id;
+      g.dataset.c = c;
+
+      const circle = document.createElementNS(svgNS, "circle");
+      circle.setAttribute("cx", node.x);
+      circle.setAttribute("cy", node.y);
+      circle.setAttribute("r", node.r ?? 16);
+      circle.classList.add(c);
+      circle.classList.add("ring");
+
+      const text = document.createElementNS(svgNS, "text");
+      text.setAttribute("x", node.x);
+      text.setAttribute("y", Number(node.y) + 5);
+      text.setAttribute("text-anchor", "middle");
+      text.classList.add("num");
+      text.textContent = n;
+
+      g.appendChild(circle);
+      g.appendChild(text);
+
+      g.addEventListener("click", (e) => {
+        e.stopPropagation();
+        // Use node center point -> viewer px
+        const p = pointToViewerPx(svg, {x: Number(node.x), y: Number(node.y)});
+        showTooltipAt(p.x, p.y, title, desc);
+      });
+
+      pins.appendChild(g);
+    }
+  }
+
+  function initPanZoom(svg){
+    const panZoom = svgPanZoom(svg, {
+      zoomEnabled: true,
+      controlIconsEnabled: false,
+      fit: true,
+      center: true,
+      minZoom: 0.2,
+      maxZoom: 20,
+      dblClickZoomEnabled: false
+    });
+
+    function refit(){
+      try{
+        panZoom.resize();
+        panZoom.fit();
+        panZoom.center();
+      }catch(_){}
+    }
+
+    // Buttons
+    btnFit.addEventListener("click", () => {
+      hideTooltip();
+      refit();
+    });
+    btnHideTip.addEventListener("click", hideTooltip);
+    document.getElementById("ttClose").addEventListener("click", hideTooltip);
+
+    // Refit on orientation / resize (mobile)
+    let t = null;
+    window.addEventListener("resize", () => {
+      clearTimeout(t);
+      t = setTimeout(refit, 200);
+    });
+    window.addEventListener("orientationchange", () => setTimeout(refit, 250));
+
+    // Initial refit twice (mobile sometimes needs a second pass)
+    setTimeout(refit, 50);
+    setTimeout(refit, 300);
+
+    // Hide tooltip while panning/zooming to avoid weird position
+    svg.addEventListener("wheel", hideTooltip, {passive:true});
+    svg.addEventListener("pointermove", () => {
+      // if user is dragging, close tooltip
+      // (simple heuristic: not perfect but good enough)
+    });
+
+    return panZoom;
+  }
+
+  (async () => {
+    const nodes = await loadNodes();
+    counterEl.textContent = `노드: ${nodes.length}`;
+
+    const { svg, pins, img } = createSvg();
+
+    // Re-render when filters change
+    const rerender = () => {
+      hideTooltip();
+      renderPins(svg, pins, nodes);
     };
-  }
+    [fR, fB, fG].forEach(el => el.addEventListener("change", rerender));
 
-  function makePin(node){
-    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
-    g.classList.add('pin');
-    g.dataset.c = node.c || 'r';
+    // Wait until bg image is available enough; then init panzoom and render
+    // (Still render immediately so user sees something)
+    rerender();
+    initPanZoom(svg);
 
-    const r = node.radius ?? 18;
-    const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
-    circle.setAttribute('cx', node.x);
-    circle.setAttribute('cy', node.y);
-    circle.setAttribute('r', r);
-    circle.classList.add(node.c || 'r');
-    circle.classList.add('ring');
-
-    const text = document.createElementNS('http://www.w3.org/2000/svg','text');
-    text.setAttribute('x', node.x);
-    text.setAttribute('y', node.y + 5);
-    text.setAttribute('text-anchor', 'middle');
-    text.classList.add('num');
-    text.textContent = (node.n ?? '');
-
-    g.appendChild(circle);
-    if ((node.n ?? '') !== '') g.appendChild(text);
-
-    g.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      showTipForNode(node);
-    });
-
-    return g;
-  }
-
-  function applyFilterToElement(el, f){
-    const c = el.dataset.c || 'r';
-    const show = !!f[c];
-    el.classList.toggle('hidden', !show);
-  }
-
-  function renderPins(){
-    pinsLayer.innerHTML = '';
-    const f = filters();
-    for(const node of NODES){
-      const el = makePin(node);
-      applyFilterToElement(el, f);
-      pinsLayer.appendChild(el);
-    }
-  }
-
-  ['f-r','f-b','f-g'].forEach(id => {
-    document.getElementById(id).addEventListener('change', () => {
-      const f = filters();
-      [...pinsLayer.children].forEach(el => applyFilterToElement(el, f));
-    });
-  });
-
-  // svg-pan-zoom init
-  const panZoom = svgPanZoom('#svg', {
-    zoomEnabled: true,
-    panEnabled: true,
-    controlIconsEnabled: false,
-    fit: true,
-    center: true,
-    minZoom: 0.2,
-    maxZoom: 20,
-    dblClickZoomEnabled: false,
-    preventMouseEventsDefault: true
-  });
-
-  // IMPORTANT: on mobile, initial fit/center sometimes doesn't apply until layout is stable
-  function hardFit(){
-    try{
-      panZoom.resize();
-      panZoom.fit();
-      panZoom.center();
-    }catch(e){}
-  }
-  window.addEventListener('resize', () => {
-    hardFit();
-    hideTip();
-  });
-
-  // Convert SVG point -> screen point for tooltip placement
-  function svgToScreenPoint(x, y){
-    const pt = svg.createSVGPoint();
-    pt.x = x; pt.y = y;
-    // Use current transformation matrix of SVG element
-    const ctm = svg.getScreenCTM();
-    if (!ctm) return {x: 12, y: 12};
-    const sp = pt.matrixTransform(ctm);
-    return {x: sp.x, y: sp.y};
-  }
-
-  function showTipAtScreen(x, y, title, body){
-    tipTitle.textContent = title || '';
-    tipBody.textContent = body || '';
-    tip.style.display = 'block';
-
-    // position with clamp
-    const pad = 12;
-    const vw = window.innerWidth, vh = window.innerHeight;
-    // measure after display
-    const rect = tip.getBoundingClientRect();
-    let left = x + 10;
-    let top  = y - rect.height - 10;
-
-    // if above goes off, place below
-    if (top < pad) top = y + 10;
-
-    // clamp horizontally
-    if (left + rect.width > vw - pad) left = vw - pad - rect.width;
-    if (left < pad) left = pad;
-
-    // clamp vertically (avoid panel peek area)
-    const panelPeek = 64; // top portion of panel visible even when closed
-    const maxTop = vh - panelPeek - rect.height - pad;
-    if (top > maxTop) top = maxTop;
-
-    tip.style.left = left + 'px';
-    tip.style.top = top + 'px';
-  }
-
-  function showTipForNode(node){
-    const title = node.name || node.title || '';
-    const body  = node.desc || node.detail || node.description || '';
-    const sp = svgToScreenPoint(node.x, node.y);
-    showTipAtScreen(sp.x, sp.y, title, body);
-  }
-
-  // Close tooltip when panning/zooming
-  svg.addEventListener('wheel', hideTip, {passive:true});
-  svg.addEventListener('touchstart', hideTip, {passive:true});
-  svg.addEventListener('pointerdown', (e) => {
-    // if user starts panning on empty background, close tooltip
-    if (e.target && e.target.id === 'bg') hideTip();
-  });
-
-  // Boot
-  async function boot(){
-    await loadNodes();
-    renderPins();
-    // Wait a tick for image/layout
-    setTimeout(hardFit, 50);
-    setTimeout(hardFit, 250);
-  }
-  window.addEventListener('load', boot);
+    // If image fails to load, tell user in console
+    img.addEventListener("error", () => console.warn("Failed to load tree image:", TREE_SRC));
+  })();
 })();
 </script>
 </body>
