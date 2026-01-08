@@ -39,10 +39,10 @@
     .num{fill:#fff;font-weight:900;font-size:15px;pointer-events:none}
     .pin circle{stroke:rgba(255,255,255,.85);stroke-width:2.4}
 
-    /* 툴팁(크기/글자 크게) */
-    .tip-box{fill:rgba(15,15,20,.92);stroke:rgba(255,255,255,.25);stroke-width:1}
-    .tip-title{fill:#fff;font-weight:900;font-size:18px}
-    .tip-text{fill:rgba(255,255,255,.92);font-size:15px}
+    /* 툴팁(이전 대비 2배) */
+    .tip-box{fill:rgba(15,15,20,.92);stroke:rgba(255,255,255,.25);stroke-width:2}
+    .tip-title{fill:#fff;font-weight:900;font-size:36px}
+    .tip-text{fill:rgba(255,255,255,.92);font-size:30px}
   </style>
 </head>
 
@@ -55,15 +55,15 @@
 
       <defs>
         <clipPath id="tipClip">
-          <rect id="tipClipRect" x="0" y="0" rx="12" ry="12" width="420" height="120"></rect>
+          <rect id="tipClipRect" x="0" y="0" rx="24" ry="24" width="840" height="240"></rect>
         </clipPath>
       </defs>
 
       <g id="tooltip" visibility="hidden">
-        <rect id="tipRect" class="tip-box" x="0" y="0" rx="12" ry="12" width="420" height="120"></rect>
+        <rect id="tipRect" class="tip-box" x="0" y="0" rx="24" ry="24" width="840" height="240"></rect>
         <g clip-path="url(#tipClip)">
-          <text id="tipTitle" class="tip-title" x="16" y="12" dominant-baseline="hanging"></text>
-          <text id="tipText" class="tip-text" x="16" y="44" dominant-baseline="hanging"></text>
+          <text id="tipTitle" class="tip-title" x="32" y="24" dominant-baseline="hanging"></text>
+          <text id="tipText" class="tip-text" x="32" y="88" dominant-baseline="hanging"></text>
         </g>
       </g>
     </svg>
@@ -101,29 +101,25 @@
   const IMG_W = 2996, IMG_H = 2832;
   const DEFAULT_PIN_R = 18;
 
-  // 툴팁 크기/타이포 (원하면 여기 숫자만 조절하면 됨)
+  // 툴팁(2배)
   const TIP = {
-    w: 420,
-    padX: 16,
-    titleY: 12,
-    textY: 44,
-    // 줄바꿈 기준(글자수). 폰트 크게 했으니 더 적게.
-    wrapLen: 28,
-    maxLines: 7,
-    // 높이 계산: 기본 + 줄수*라인높이
-    baseH: 56,
-    lineH: 22,
-    // 노드에서 떨어진 거리
-    offsetX: 26,
-    offsetY: -18
+    w: 840,
+    padX: 32,
+    titleY: 24,
+    textY: 88,
+    wrapLen: 18,
+    maxLines: 6,
+    baseH: 112,
+    lineH: 44,
+    offsetX: 52,
+    offsetY: -36
   };
 
   const eventsHandler = {
     haltEventListeners: ['touchstart','touchend','touchmove','touchleave','touchcancel'],
     init: function(options) {
       const instance = options.instance;
-      let initialScale = 1;
-      let pannedX = 0, pannedY = 0;
+      let initialScale = 1, pannedX = 0, pannedY = 0;
 
       this.hammer = new Hammer(options.svgElement, { inputClass: Hammer.TouchInput });
       this.hammer.get('pinch').set({ enable: true });
@@ -192,10 +188,7 @@
     for (const l of rawLines) {
       let s = l.trim();
       if (!s) { out.push(''); continue; }
-      while (s.length > maxLen) {
-        out.push(s.slice(0, maxLen));
-        s = s.slice(maxLen);
-      }
+      while (s.length > maxLen) { out.push(s.slice(0, maxLen)); s = s.slice(maxLen); }
       out.push(s);
     }
     return out;
@@ -205,7 +198,6 @@
     textEl.setAttribute('x', x);
     textEl.setAttribute('y', y);
     clearText(textEl);
-
     lines.forEach((ln, i) => {
       const tspan = document.createElementNS('http://www.w3.org/2000/svg','tspan');
       tspan.setAttribute('x', x);
@@ -278,16 +270,8 @@
 
     g.insertBefore(circle, g.firstChild);
 
-    g.addEventListener('click', (ev) => {
-      ev.stopPropagation();
-      showTooltipAt(node);
-    }, { passive: true });
-
-    g.addEventListener('touchend', (ev) => {
-      ev.preventDefault();
-      ev.stopPropagation();
-      showTooltipAt(node);
-    }, { passive: false });
+    g.addEventListener('click', (ev) => { ev.stopPropagation(); showTooltipAt(node); }, { passive: true });
+    g.addEventListener('touchend', (ev) => { ev.preventDefault(); ev.stopPropagation(); showTooltipAt(node); }, { passive: false });
 
     return g;
   }
