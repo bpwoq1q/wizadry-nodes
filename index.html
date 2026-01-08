@@ -5,370 +5,311 @@
   <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
   <title>Wizardry Nodes (Read-only)</title>
   <style>
-    :root{
-      --bg:#0f0f12; --panel:#0f0f12; --border:#262630; --text:#eee;
-      --muted:rgba(255,255,255,.7);
-    }
-    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
-    #wrap{display:flex; height:100vh; height:100dvh;}
-    #viewer{flex:1; position:relative; overflow:hidden; min-width:0;}
+    :root{color-scheme:dark}
+    html,body{height:100%;margin:0;background:#0b0b0e;color:#eee;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    #wrap{display:flex;height:100vh;overflow:hidden}
+    #viewer{flex:1;position:relative;min-width:0;touch-action:none;} /* 중요: 모바일 제스처는 svg-pan-zoom이 처리 */
     #side{
-      width:320px; max-width:45vw;
-      border-left:1px solid var(--border);
-      background:var(--panel);
-      box-sizing:border-box;
-      padding:12px;
+      width:320px; max-width:48vw;
+      border-left:1px solid #242433;
+      background:#0f0f14;
+      padding:12px; box-sizing:border-box;
       overflow:auto;
     }
-    #map{width:100%;height:100%;}
-    .row{display:flex;align-items:center;gap:8px;margin:8px 0;}
-    .hint{font-size:12px; color:var(--muted); line-height:1.35;}
-    h3{margin:10px 0 6px; font-size:13px; font-weight:800; color:#cfcfe8;}
-    hr{border:0;border-top:1px solid var(--border); margin:12px 0;}
-
-    /* Responsive: 모바일에서는 사이드바를 아래로 */
-    @media (max-width: 900px){
-      #wrap{flex-direction:column;}
-      #side{
-        width:100%;
-        max-width:none;
-        border-left:none;
-        border-top:1px solid var(--border);
-        padding:10px 12px;
-        max-height:40vh;
-      }
-      #viewer{height:60vh;}
-    }
-
-    /* Pins (SVG) */
-    .pin{cursor:pointer}
-    .r{fill:#d63a3a} .b{fill:#2f6bff} .g{fill:#20a56b}
-    .num{fill:#fff;font-weight:900;font-size:14px;pointer-events:none}
-    .ring{stroke:rgba(255,255,255,.9);stroke-width:2}
-
-    /* Tooltip bubble */
-    #tooltip{
-      position:absolute;
-      z-index:10;
-      min-width:180px;
-      max-width:min(320px, 80vw);
-      background:rgba(20,20,26,.96);
-      border:1px solid rgba(255,255,255,.12);
-      border-radius:14px;
-      padding:10px 12px;
-      box-shadow:0 10px 30px rgba(0,0,0,.45);
-      backdrop-filter: blur(6px);
-      display:none;
-    }
-    #tooltip .t{font-weight:900; font-size:14px; margin-bottom:6px;}
-    #tooltip .d{font-size:12px; color:rgba(255,255,255,.82); white-space:pre-wrap;}
-    #tooltip .x{
-      position:absolute; top:6px; right:8px;
-      width:28px; height:28px; border-radius:999px;
-      border:1px solid rgba(255,255,255,.14);
-      background:rgba(255,255,255,.06);
-      color:#fff; cursor:pointer;
-    }
-
-    /* Small controls */
+    .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:8px 0}
     .btn{
-      display:inline-flex; align-items:center; justify-content:center;
-      padding:6px 10px;
-      border-radius:12px;
-      border:1px solid rgba(255,255,255,.14);
-      background:rgba(255,255,255,.06);
-      color:#eee;
-      cursor:pointer;
-      font-size:12px;
-      user-select:none;
+      padding:8px 10px;border-radius:10px;border:1px solid #2e2e45;
+      background:#191925;color:#eee;cursor:pointer;
+      font-weight:600;font-size:13px;
     }
-    .btn:active{transform:translateY(1px);}
-    .kbd{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;opacity:.85;border:1px solid rgba(255,255,255,.14);padding:1px 6px;border-radius:8px;}
+    .btn:active{transform:translateY(1px)}
+    .muted{opacity:.75;font-size:12px;line-height:1.35}
+    hr{border:0;border-top:1px solid #242433;margin:12px 0}
+    label{display:flex;align-items:center;gap:8px;margin:8px 0}
+    input[type="checkbox"]{transform:scale(1.15)}
+    /* 모바일에서는 패널을 아래로 */
+    @media (max-width: 820px){
+      #wrap{flex-direction:column}
+      #side{width:100%;max-width:none;max-height:42vh;border-left:none;border-top:1px solid #242433}
+      #viewer{height:58vh}
+    }
+
+    /* SVG 핀 */
+    .pin{cursor:pointer}
+    .r{fill:#d63a3a}.b{fill:#2f6bff}.g{fill:#20a56b}
+    .num{fill:#fff;font-weight:900;font-size:14px;pointer-events:none}
+    .pin circle{stroke:rgba(255,255,255,.85);stroke-width:2}
+    /* 툴팁 */
+    .tip-box{fill:rgba(15,15,20,.92);stroke:rgba(255,255,255,.25);stroke-width:1}
+    .tip-title{fill:#fff;font-weight:900;font-size:14px}
+    .tip-text{fill:rgba(255,255,255,.9);font-size:12px}
   </style>
 </head>
+
 <body>
 <div id="wrap">
   <div id="viewer">
-    <div id="map"></div>
+    <svg id="svg" width="100%" height="100%" viewBox="0 0 2996 2832" xmlns="http://www.w3.org/2000/svg">
+      <image id="bg" href="tree.png" x="0" y="0" width="2996" height="2832" />
+      <!-- 노드 -->
+      <g id="pins"></g>
 
-    <div id="tooltip" role="dialog" aria-modal="false">
-      <button class="x" id="ttClose" aria-label="닫기">✕</button>
-      <div class="t" id="ttTitle"></div>
-      <div class="d" id="ttDesc"></div>
-    </div>
+      <!-- SVG 내부 툴팁(좌표계가 같아서 PC/모바일 모두 "노드 자리"에 정확히 뜸) -->
+      <g id="tooltip" visibility="hidden">
+        <rect id="tipRect" class="tip-box" x="0" y="0" rx="10" ry="10" width="260" height="60"></rect>
+        <text id="tipTitle" class="tip-title" x="12" y="10" dominant-baseline="hanging"></text>
+        <text id="tipText" class="tip-text" x="12" y="30" dominant-baseline="hanging"></text>
+      </g>
+    </svg>
   </div>
 
   <aside id="side">
-    <div class="row"><b id="counter">노드: 0</b></div>
+    <div class="row"><b id="count">노드: ...</b></div>
 
     <div class="row">
       <button class="btn" id="btnFit">화면에 맞춤</button>
-      <button class="btn" id="btnHideTip">말풍선 닫기</button>
+      <button class="btn" id="btnCloseTip">말풍선 닫기</button>
     </div>
 
     <hr/>
 
-    <h3>필터</h3>
-    <div class="row"><input type="checkbox" id="f-r" checked> <label for="f-r">빨강</label></div>
-    <div class="row"><input type="checkbox" id="f-b" checked> <label for="f-b">파랑</label></div>
-    <div class="row"><input type="checkbox" id="f-g" checked> <label for="f-g">초록</label></div>
+    <div><b>필터</b></div>
+    <label><input type="checkbox" id="f-r" checked>빨강</label>
+    <label><input type="checkbox" id="f-b" checked>파랑</label>
+    <label><input type="checkbox" id="f-g" checked>초록</label>
 
     <hr/>
-    <div class="hint">
-      • 노드 탭하면 제목/설명 말풍선이 떠.<br/>
-      • PC에서 스크롤 줌 가능, 드래그로 이동 가능.<br/>
-      • 모바일에서 두 손가락으로 확대/이동 가능.<br/>
-      • 잘 안 맞으면 <span class="kbd">화면에 맞춤</span> 눌러.
+    <div class="muted">
+      • 노드 탭/클릭하면 제목/설명이 말풍선으로 떠.<br/>
+      • PC: 마우스 휠로 확대/축소, 드래그로 이동 가능.<br/>
+      • 모바일: 두 손가락으로 확대/이동 가능.<br/>
+      • 이미지/노드가 안 맞아 보이면 “화면에 맞춤” 눌러.
     </div>
   </aside>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/hammerjs@2.0.8/hammer.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
 
 <script>
-(() => {
-  const IMG_W = 2996;
-  const IMG_H = 2832;
-  const TREE_SRC = "tree.png";
-  const NODES_SRC = "nodes.json";
+  // === 이미지 크기(사용자 제공): 2996 x 2832 ===
+  const IMG_W = 2996, IMG_H = 2832;
 
-  const mapEl = document.getElementById("map");
-  const counterEl = document.getElementById("counter");
+  // --- svg-pan-zoom 모바일 터치 핸들러(Hammer.js) ---
+  const eventsHandler = {
+    haltEventListeners: ['touchstart','touchend','touchmove','touchleave','touchcancel'],
+    init: function(options) {
+      const instance = options.instance;
+      let initialScale = 1;
+      let pannedX = 0, pannedY = 0;
 
-  const tooltip = document.getElementById("tooltip");
-  const ttTitle = document.getElementById("ttTitle");
-  const ttDesc  = document.getElementById("ttDesc");
-  const btnFit  = document.getElementById("btnFit");
-  const btnHideTip = document.getElementById("btnHideTip");
+      this.hammer = new Hammer(options.svgElement, { inputClass: Hammer.TouchInput });
+      this.hammer.get('pinch').set({ enable: true });
 
-  const fR = document.getElementById("f-r");
-  const fB = document.getElementById("f-b");
-  const fG = document.getElementById("f-g");
+      // 더블탭 확대 비활성(요구사항)
+      this.hammer.get('doubletap') && this.hammer.get('doubletap').set({ enable: false });
 
-  function esc(s){
-    return (s ?? "").toString()
-      .replaceAll("&","&amp;")
-      .replaceAll("<","&lt;")
-      .replaceAll(">","&gt;")
-      .replaceAll('"',"&quot;")
-      .replaceAll("'","&#39;");
-  }
-
-  async function loadNodes(){
-    try{
-      const res = await fetch(NODES_SRC, {cache:"no-store"});
-      const data = await res.json();
-      if (Array.isArray(data)) return data;
-      if (data && Array.isArray(data.nodes)) return data.nodes;
-      return [];
-    }catch(e){
-      console.warn("nodes.json load failed:", e);
-      return [];
-    }
-  }
-
-  function getFilters(){
-    return { r: fR.checked, b: fB.checked, g: fG.checked };
-  }
-
-  function hideTooltip(){
-    tooltip.style.display = "none";
-  }
-
-  function showTooltipAt(x, y, title, desc){
-    ttTitle.textContent = title || "";
-    ttDesc.textContent  = desc  || "";
-    tooltip.style.display = "block";
-
-    // position relative to viewer
-    const viewerRect = document.getElementById("viewer").getBoundingClientRect();
-    const pad = 10;
-
-    // default offset
-    let left = x + 14;
-    let top  = y + 14;
-
-    // measure
-    tooltip.style.left = "0px";
-    tooltip.style.top  = "0px";
-    const w = tooltip.offsetWidth;
-    const h = tooltip.offsetHeight;
-
-    // clamp within viewer
-    if (left + w > viewerRect.width - pad) left = x - w - 14;
-    if (top + h > viewerRect.height - pad) top = y - h - 14;
-    left = Math.max(pad, Math.min(left, viewerRect.width - w - pad));
-    top  = Math.max(pad, Math.min(top,  viewerRect.height - h - pad));
-
-    tooltip.style.left = left + "px";
-    tooltip.style.top  = top + "px";
-  }
-
-  function pointToViewerPx(svgEl, svgPoint){
-    // svgPoint is in SVG user units; convert to screen px and then to viewer-relative px
-    const pt = svgEl.createSVGPoint();
-    pt.x = svgPoint.x; pt.y = svgPoint.y;
-    const screen = pt.matrixTransform(svgEl.getScreenCTM());
-    const viewerRect = document.getElementById("viewer").getBoundingClientRect();
-    return { x: screen.x - viewerRect.left, y: screen.y - viewerRect.top };
-  }
-
-  function createSvg(){
-    const svgNS = "http://www.w3.org/2000/svg";
-    const svg = document.createElementNS(svgNS, "svg");
-    svg.id = "svg";
-    svg.setAttribute("width", "100%");
-    svg.setAttribute("height", "100%");
-    svg.setAttribute("viewBox", `0 0 ${IMG_W} ${IMG_H}`);
-    svg.setAttribute("preserveAspectRatio", "xMidYMid meet");
-    svg.style.touchAction = "none";
-
-    const img = document.createElementNS(svgNS, "image");
-    img.setAttribute("href", TREE_SRC);
-    img.setAttribute("x", "0");
-    img.setAttribute("y", "0");
-    img.setAttribute("width", IMG_W);
-    img.setAttribute("height", IMG_H);
-    img.setAttribute("id", "bg");
-    svg.appendChild(img);
-
-    const pins = document.createElementNS(svgNS, "g");
-    pins.setAttribute("id", "pins");
-    svg.appendChild(pins);
-
-    mapEl.innerHTML = "";
-    mapEl.appendChild(svg);
-
-    // Disable native dblclick zoom behavior
-    svg.addEventListener("dblclick", (e) => { e.preventDefault(); e.stopPropagation(); }, {passive:false});
-
-    // Click outside nodes closes tooltip
-    svg.addEventListener("pointerdown", (e) => {
-      // if clicking background or empty area, close tooltip
-      if (!e.target.closest || !e.target.closest(".pin")) hideTooltip();
-    });
-
-    return { svg, pins, img };
-  }
-
-  function renderPins(svg, pins, nodes){
-    pins.innerHTML = "";
-    const svgNS = "http://www.w3.org/2000/svg";
-    const f = getFilters();
-
-    for(const node of nodes){
-      const id = node.id ?? "";
-      const c  = (node.c ?? node.color ?? "r").toString().toLowerCase();
-      const n  = (node.n ?? "").toString();
-      const title = node.name ?? node.title ?? "";
-      const desc  = node.desc ?? node.description ?? node.effect ?? "";
-
-      if (!f[c]) continue;
-
-      const g = document.createElementNS(svgNS, "g");
-      g.classList.add("pin");
-      g.dataset.id = id;
-      g.dataset.c = c;
-
-      const circle = document.createElementNS(svgNS, "circle");
-      circle.setAttribute("cx", node.x);
-      circle.setAttribute("cy", node.y);
-      circle.setAttribute("r", node.r ?? 16);
-      circle.classList.add(c);
-      circle.classList.add("ring");
-
-      const text = document.createElementNS(svgNS, "text");
-      text.setAttribute("x", node.x);
-      text.setAttribute("y", Number(node.y) + 5);
-      text.setAttribute("text-anchor", "middle");
-      text.classList.add("num");
-      text.textContent = n;
-
-      g.appendChild(circle);
-      g.appendChild(text);
-
-      g.addEventListener("click", (e) => {
-        e.stopPropagation();
-        // Use node center point -> viewer px
-        const p = pointToViewerPx(svg, {x: Number(node.x), y: Number(node.y)});
-        showTooltipAt(p.x, p.y, title, desc);
+      this.hammer.on('panstart panmove', function(ev) {
+        if (ev.type === 'panstart') { pannedX = 0; pannedY = 0; }
+        instance.panBy({ x: ev.deltaX - pannedX, y: ev.deltaY - pannedY });
+        pannedX = ev.deltaX; pannedY = ev.deltaY;
       });
 
-      pins.appendChild(g);
-    }
+      this.hammer.on('pinchstart pinchmove', function(ev) {
+        if (ev.type === 'pinchstart') initialScale = instance.getZoom();
+        instance.zoomAtPoint(initialScale * ev.scale, { x: ev.center.x, y: ev.center.y });
+      });
+
+      // 페이지 스크롤 방지(캔버스 영역에서)
+      options.svgElement.addEventListener('touchmove', function(e){ e.preventDefault(); }, { passive:false });
+    },
+    destroy: function(){ this.hammer && this.hammer.destroy(); }
+  };
+
+  const panZoom = svgPanZoom('#svg', {
+    zoomEnabled: true,
+    panEnabled: true,
+    controlIconsEnabled: false,
+    fit: true,
+    center: true,
+    minZoom: 0.15,
+    maxZoom: 20,
+    dblClickZoomEnabled: false,           // 더블클릭 확대 OFF
+    preventMouseEventsDefault: false,     // 클릭 이벤트가 먹게
+    customEventsHandler: eventsHandler
+  });
+
+  // 로딩 타이밍(모바일에서 초기 fit이 꼬이는 것 방지)
+  function forceFitCenter() {
+    try { panZoom.resize(); panZoom.fit(); panZoom.center(); } catch(e) {}
+  }
+  window.addEventListener('load', () => { forceFitCenter(); setTimeout(forceFitCenter, 150); setTimeout(forceFitCenter, 450); });
+  window.addEventListener('resize', () => { forceFitCenter(); });
+
+  // --- nodes.json 로드 ---
+  async function loadNodes() {
+    const res = await fetch('nodes.json', { cache: 'no-store' });
+    const data = await res.json();
+    if (Array.isArray(data)) return data;
+    if (data && Array.isArray(data.nodes)) return data.nodes;
+    return [];
   }
 
-  function initPanZoom(svg){
-    const panZoom = svgPanZoom(svg, {
-      zoomEnabled: true,
-      controlIconsEnabled: false,
-      fit: true,
-      center: true,
-      minZoom: 0.2,
-      maxZoom: 20,
-      dblClickZoomEnabled: false
+  const pinsEl = document.getElementById('pins');
+  const tip = document.getElementById('tooltip');
+  const tipRect = document.getElementById('tipRect');
+  const tipTitle = document.getElementById('tipTitle');
+  const tipText = document.getElementById('tipText');
+
+  function setTipVisible(v){ tip.setAttribute('visibility', v ? 'visible' : 'hidden'); }
+
+  // 텍스트를 여러 줄(tspan)로 렌더
+  function setMultilineText(textEl, lines) {
+    while (textEl.firstChild) textEl.removeChild(textEl.firstChild);
+    lines.forEach((ln, i) => {
+      const tspan = document.createElementNS('http://www.w3.org/2000/svg','tspan');
+      tspan.setAttribute('x', textEl.getAttribute('x'));
+      tspan.setAttribute('dy', i === 0 ? '0' : '1.2em');
+      tspan.textContent = ln;
+      textEl.appendChild(tspan);
     });
-
-    function refit(){
-      try{
-        panZoom.resize();
-        panZoom.fit();
-        panZoom.center();
-      }catch(_){}
-    }
-
-    // Buttons
-    btnFit.addEventListener("click", () => {
-      hideTooltip();
-      refit();
-    });
-    btnHideTip.addEventListener("click", hideTooltip);
-    document.getElementById("ttClose").addEventListener("click", hideTooltip);
-
-    // Refit on orientation / resize (mobile)
-    let t = null;
-    window.addEventListener("resize", () => {
-      clearTimeout(t);
-      t = setTimeout(refit, 200);
-    });
-    window.addEventListener("orientationchange", () => setTimeout(refit, 250));
-
-    // Initial refit twice (mobile sometimes needs a second pass)
-    setTimeout(refit, 50);
-    setTimeout(refit, 300);
-
-    // Hide tooltip while panning/zooming to avoid weird position
-    svg.addEventListener("wheel", hideTooltip, {passive:true});
-    svg.addEventListener("pointermove", () => {
-      // if user is dragging, close tooltip
-      // (simple heuristic: not perfect but good enough)
-    });
-
-    return panZoom;
   }
 
-  (async () => {
-    const nodes = await loadNodes();
-    counterEl.textContent = `노드: ${nodes.length}`;
+  // 너무 긴 문장은 대충 줄바꿈(한글/영문 섞임 대응용 간단 래핑)
+  function wrapText(str, maxLen) {
+    if (!str) return [''];
+    const rawLines = String(str).split('\n');
+    const out = [];
+    for (const l of rawLines) {
+      let s = l.trim();
+      if (!s) { out.push(''); continue; }
+      while (s.length > maxLen) {
+        out.push(s.slice(0, maxLen));
+        s = s.slice(maxLen);
+      }
+      out.push(s);
+    }
+    return out;
+  }
 
-    const { svg, pins, img } = createSvg();
+  function showTooltipAt(node) {
+    const title = node.name || node.title || '(제목 없음)';
+    const desc = node.desc || node.detail || node.description || '';
 
-    // Re-render when filters change
-    const rerender = () => {
-      hideTooltip();
-      renderPins(svg, pins, nodes);
-    };
-    [fR, fB, fG].forEach(el => el.addEventListener("change", rerender));
+    tipTitle.textContent = '';
+    tipText.textContent = '';
 
-    // Wait until bg image is available enough; then init panzoom and render
-    // (Still render immediately so user sees something)
-    rerender();
-    initPanZoom(svg);
+    tipTitle.textContent = title;
 
-    // If image fails to load, tell user in console
-    img.addEventListener("error", () => console.warn("Failed to load tree image:", TREE_SRC));
+    const lines = wrapText(desc, 26).slice(0, 6); // 너무 길면 6줄까지만
+    setMultilineText(tipText, lines);
+
+    // tooltip 박스 크기 계산(대략)
+    const lineCount = Math.max(1, lines.length);
+    const w = 280;
+    const h = 34 + (lineCount * 16);
+
+    // 노드 근처에 배치 + 화면 밖으로 나가면 클램프
+    let x = node.x + 22;
+    let y = node.y - 12;
+    if (x + w > IMG_W) x = node.x - w - 22;
+    if (x < 0) x = 10;
+    if (y + h > IMG_H) y = IMG_H - h - 10;
+    if (y < 0) y = 10;
+
+    tipRect.setAttribute('x', x);
+    tipRect.setAttribute('y', y);
+    tipRect.setAttribute('width', w);
+    tipRect.setAttribute('height', h);
+
+    tipTitle.setAttribute('x', x + 12);
+    tipTitle.setAttribute('y', y + 10);
+
+    tipText.setAttribute('x', x + 12);
+    tipText.setAttribute('y', y + 30);
+
+    setTipVisible(true);
+  }
+
+  function hideTooltip(){ setTipVisible(false); }
+
+  function makeNodeEl(node){
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.classList.add('pin');
+    g.dataset.c = node.c || node.color || 'r';
+
+    const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    circle.setAttribute('cx', node.x);
+    circle.setAttribute('cy', node.y);
+    circle.setAttribute('r', node.radius || 14);
+    circle.classList.add(g.dataset.c);
+
+    const text = document.createElementNS('http://www.w3.org/2000/svg','text');
+    text.setAttribute('x', node.x);
+    text.setAttribute('y', node.y + 5);
+    text.setAttribute('text-anchor','middle');
+    text.classList.add('num');
+    text.textContent = (node.n ?? node.num ?? '') || '';
+
+    g.appendChild(circle);
+    if (text.textContent) g.appendChild(text);
+
+    // 클릭/탭: 말풍선 표시
+    g.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      showTooltipAt(node);
+    }, { passive: true });
+
+    // 모바일에서 click이 씹히는 기기 대비: touchend도 추가
+    g.addEventListener('touchend', (ev) => {
+      ev.preventDefault();
+      ev.stopPropagation();
+      showTooltipAt(node);
+    }, { passive: false });
+
+    return g;
+  }
+
+  function applyFilter(){
+    const fr = document.getElementById('f-r').checked;
+    const fb = document.getElementById('f-b').checked;
+    const fg = document.getElementById('f-g').checked;
+    [...pinsEl.children].forEach(g=>{
+      const c = g.dataset.c;
+      const show = (c === 'r') ? fr : (c === 'b') ? fb : fg;
+      g.style.display = show ? '' : 'none';
+    });
+  }
+
+  // 배경(빈 곳) 클릭하면 말풍선 닫기
+  document.getElementById('svg').addEventListener('click', () => hideTooltip(), { passive:true });
+  document.getElementById('svg').addEventListener('touchend', (e) => { /* 빈곳 탭 닫기 */ hideTooltip(); }, { passive:true });
+
+  document.getElementById('btnFit').addEventListener('click', () => { hideTooltip(); forceFitCenter(); });
+  document.getElementById('btnCloseTip').addEventListener('click', () => hideTooltip());
+
+  ['f-r','f-b','f-g'].forEach(id => document.getElementById(id).addEventListener('change', applyFilter));
+
+  (async function init(){
+    let nodes = [];
+    try{
+      nodes = await loadNodes();
+    }catch(e){
+      console.error(e);
+      nodes = [];
+    }
+
+    document.getElementById('count').textContent = `노드: ${nodes.length}`;
+
+    // 렌더
+    pinsEl.innerHTML = '';
+    for (const n of nodes){
+      if (typeof n.x !== 'number' || typeof n.y !== 'number') continue;
+      pinsEl.appendChild(makeNodeEl(n));
+    }
+    applyFilter();
+    forceFitCenter();
   })();
-})();
 </script>
 </body>
 </html>
