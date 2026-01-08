@@ -8,7 +8,7 @@
     :root{color-scheme:dark}
     html,body{height:100%;margin:0;background:#0b0b0e;color:#eee;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
     #wrap{display:flex;height:100vh;overflow:hidden}
-    #viewer{flex:1;position:relative;min-width:0;touch-action:none;} /* 중요: 모바일 제스처는 svg-pan-zoom이 처리 */
+    #viewer{flex:1;position:relative;min-width:0;touch-action:none;} /* 모바일 제스처는 svg-pan-zoom이 처리 */
     #side{
       width:320px; max-width:48vw;
       border-left:1px solid #242433;
@@ -27,7 +27,6 @@
     hr{border:0;border-top:1px solid #242433;margin:12px 0}
     label{display:flex;align-items:center;gap:8px;margin:8px 0}
     input[type="checkbox"]{transform:scale(1.15)}
-    /* 모바일에서는 패널을 아래로 */
     @media (max-width: 820px){
       #wrap{flex-direction:column}
       #side{width:100%;max-width:none;max-height:42vh;border-left:none;border-top:1px solid #242433}
@@ -37,8 +36,9 @@
     /* SVG 핀 */
     .pin{cursor:pointer}
     .r{fill:#d63a3a}.b{fill:#2f6bff}.g{fill:#20a56b}
-    .num{fill:#fff;font-weight:900;font-size:14px;pointer-events:none}
-    .pin circle{stroke:rgba(255,255,255,.85);stroke-width:2}
+    .num{fill:#fff;font-weight:900;font-size:15px;pointer-events:none}
+    .pin circle{stroke:rgba(255,255,255,.85);stroke-width:2.4}
+
     /* 툴팁 */
     .tip-box{fill:rgba(15,15,20,.92);stroke:rgba(255,255,255,.25);stroke-width:1}
     .tip-title{fill:#fff;font-weight:900;font-size:14px}
@@ -51,14 +51,23 @@
   <div id="viewer">
     <svg id="svg" width="100%" height="100%" viewBox="0 0 2996 2832" xmlns="http://www.w3.org/2000/svg">
       <image id="bg" href="tree.png" x="0" y="0" width="2996" height="2832" />
-      <!-- 노드 -->
       <g id="pins"></g>
 
-      <!-- SVG 내부 툴팁(좌표계가 같아서 PC/모바일 모두 "노드 자리"에 정확히 뜸) -->
+      <!-- SVG 내부 툴팁(좌표계 동일 -> 절대 안 어긋남) -->
+      <defs>
+        <!-- 텍스트가 박스 밖으로 나가도 깔끔하게 잘리게(안전장치) -->
+        <clipPath id="tipClip">
+          <rect id="tipClipRect" x="0" y="0" rx="10" ry="10" width="280" height="80"></rect>
+        </clipPath>
+      </defs>
+
       <g id="tooltip" visibility="hidden">
-        <rect id="tipRect" class="tip-box" x="0" y="0" rx="10" ry="10" width="260" height="60"></rect>
-        <text id="tipTitle" class="tip-title" x="12" y="10" dominant-baseline="hanging"></text>
-        <text id="tipText" class="tip-text" x="12" y="30" dominant-baseline="hanging"></text>
+        <rect id="tipRect" class="tip-box" x="0" y="0" rx="10" ry="10" width="280" height="80"></rect>
+
+        <g clip-path="url(#tipClip)">
+          <text id="tipTitle" class="tip-title" x="12" y="10" dominant-baseline="hanging"></text>
+          <text id="tipText" class="tip-text" x="12" y="30" dominant-baseline="hanging"></text>
+        </g>
       </g>
     </svg>
   </div>
@@ -81,7 +90,7 @@
     <hr/>
     <div class="muted">
       • 노드 탭/클릭하면 제목/설명이 말풍선으로 떠.<br/>
-      • PC: 마우스 휠로 확대/축소, 드래그로 이동 가능.<br/>
+      • PC: 마우스 휠 확대/축소, 드래그 이동 가능.<br/>
       • 모바일: 두 손가락으로 확대/이동 가능.<br/>
       • 이미지/노드가 안 맞아 보이면 “화면에 맞춤” 눌러.
     </div>
@@ -92,8 +101,11 @@
 <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
 
 <script>
-  // === 이미지 크기(사용자 제공): 2996 x 2832 ===
+  // === 이미지 크기 ===
   const IMG_W = 2996, IMG_H = 2832;
+
+  // === 핀 기본 크기(요구: 좀 더 크게) ===
+  const DEFAULT_PIN_R = 18;
 
   // --- svg-pan-zoom 모바일 터치 핸들러(Hammer.js) ---
   const eventsHandler = {
@@ -107,7 +119,8 @@
       this.hammer.get('pinch').set({ enable: true });
 
       // 더블탭 확대 비활성(요구사항)
-      this.hammer.get('doubletap') && this.hammer.get('doubletap').set({ enable: false });
+      const dbl = this.hammer.get('doubletap');
+      if (dbl) dbl.set({ enable: false });
 
       this.hammer.on('panstart panmove', function(ev) {
         if (ev.type === 'panstart') { pannedX = 0; pannedY = 0; }
@@ -134,12 +147,11 @@
     center: true,
     minZoom: 0.15,
     maxZoom: 20,
-    dblClickZoomEnabled: false,           // 더블클릭 확대 OFF
-    preventMouseEventsDefault: false,     // 클릭 이벤트가 먹게
+    dblClickZoomEnabled: false,
+    preventMouseEventsDefault: false,
     customEventsHandler: eventsHandler
   });
 
-  // 로딩 타이밍(모바일에서 초기 fit이 꼬이는 것 방지)
   function forceFitCenter() {
     try { panZoom.resize(); panZoom.fit(); panZoom.center(); } catch(e) {}
   }
@@ -155,27 +167,21 @@
     return [];
   }
 
+  const svg = document.getElementById('svg');
   const pinsEl = document.getElementById('pins');
   const tip = document.getElementById('tooltip');
   const tipRect = document.getElementById('tipRect');
+  const tipClipRect = document.getElementById('tipClipRect');
   const tipTitle = document.getElementById('tipTitle');
   const tipText = document.getElementById('tipText');
 
   function setTipVisible(v){ tip.setAttribute('visibility', v ? 'visible' : 'hidden'); }
 
-  // 텍스트를 여러 줄(tspan)로 렌더
-  function setMultilineText(textEl, lines) {
-    while (textEl.firstChild) textEl.removeChild(textEl.firstChild);
-    lines.forEach((ln, i) => {
-      const tspan = document.createElementNS('http://www.w3.org/2000/svg','tspan');
-      tspan.setAttribute('x', textEl.getAttribute('x'));
-      tspan.setAttribute('dy', i === 0 ? '0' : '1.2em');
-      tspan.textContent = ln;
-      textEl.appendChild(tspan);
-    });
+  function clearText(el){
+    while (el.firstChild) el.removeChild(el.firstChild);
   }
 
-  // 너무 긴 문장은 대충 줄바꿈(한글/영문 섞임 대응용 간단 래핑)
+  // 긴 문장 줄바꿈(간단)
   function wrapText(str, maxLen) {
     if (!str) return [''];
     const rawLines = String(str).split('\n');
@@ -192,41 +198,61 @@
     return out;
   }
 
+  // tspan 라인 생성(중요: rect 위치/텍스트 x,y 지정 "후"에 생성해서 첫 클릭에도 안 튐)
+  function setMultilineText(textEl, x, y, lines) {
+    textEl.setAttribute('x', x);
+    textEl.setAttribute('y', y);
+    clearText(textEl);
+
+    lines.forEach((ln, i) => {
+      const tspan = document.createElementNS('http://www.w3.org/2000/svg','tspan');
+      tspan.setAttribute('x', x);
+      // dominant-baseline이 hanging이라 dy는 em 기준으로 내려주기만 하면 됨
+      tspan.setAttribute('dy', i === 0 ? '0' : '1.25em');
+      tspan.textContent = ln;
+      textEl.appendChild(tspan);
+    });
+  }
+
   function showTooltipAt(node) {
     const title = node.name || node.title || '(제목 없음)';
     const desc = node.desc || node.detail || node.description || '';
 
-    tipTitle.textContent = '';
-    tipText.textContent = '';
-
-    tipTitle.textContent = title;
-
-    const lines = wrapText(desc, 26).slice(0, 6); // 너무 길면 6줄까지만
-    setMultilineText(tipText, lines);
-
-    // tooltip 박스 크기 계산(대략)
+    // 라인 준비
+    const lines = wrapText(desc, 26).slice(0, 6);
     const lineCount = Math.max(1, lines.length);
-    const w = 280;
-    const h = 34 + (lineCount * 16);
 
-    // 노드 근처에 배치 + 화면 밖으로 나가면 클램프
-    let x = node.x + 22;
-    let y = node.y - 12;
-    if (x + w > IMG_W) x = node.x - w - 22;
-    if (x < 0) x = 10;
-    if (y + h > IMG_H) y = IMG_H - h - 10;
-    if (y < 0) y = 10;
+    // 박스 크기
+    const w = 300;
+    const h = 36 + (lineCount * 16);
 
+    // 위치 계산 + 화면 클램프
+    let x = node.x + 24;
+    let y = node.y - 16;
+
+    if (x + w > IMG_W) x = node.x - w - 24;
+    if (x < 8) x = 8;
+    if (y + h > IMG_H) y = IMG_H - h - 8;
+    if (y < 8) y = 8;
+
+    // 박스/클립 동기화
     tipRect.setAttribute('x', x);
     tipRect.setAttribute('y', y);
     tipRect.setAttribute('width', w);
     tipRect.setAttribute('height', h);
 
+    tipClipRect.setAttribute('x', x);
+    tipClipRect.setAttribute('y', y);
+    tipClipRect.setAttribute('width', w);
+    tipClipRect.setAttribute('height', h);
+
+    // 텍스트는 "위치 지정 후" 라인 생성 (첫 클릭 튐 해결)
+    clearText(tipTitle);
+    tipTitle.textContent = title;
     tipTitle.setAttribute('x', x + 12);
     tipTitle.setAttribute('y', y + 10);
 
-    tipText.setAttribute('x', x + 12);
-    tipText.setAttribute('y', y + 30);
+    setMultilineText(tipText, x + 12, y + 30, lines);
 
     setTipVisible(true);
   }
@@ -241,18 +267,21 @@
     const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
     circle.setAttribute('cx', node.x);
     circle.setAttribute('cy', node.y);
-    circle.setAttribute('r', node.radius || 14);
+    circle.setAttribute('r', node.radius || DEFAULT_PIN_R);
     circle.classList.add(g.dataset.c);
 
-    const text = document.createElementNS('http://www.w3.org/2000/svg','text');
-    text.setAttribute('x', node.x);
-    text.setAttribute('y', node.y + 5);
-    text.setAttribute('text-anchor','middle');
-    text.classList.add('num');
-    text.textContent = (node.n ?? node.num ?? '') || '';
+    const t = (node.n ?? node.num ?? '') || '';
+    if (t !== '') {
+      const text = document.createElementNS('http://www.w3.org/2000/svg','text');
+      text.setAttribute('x', node.x);
+      text.setAttribute('y', node.y + 5);
+      text.setAttribute('text-anchor','middle');
+      text.classList.add('num');
+      text.textContent = t;
+      g.appendChild(text);
+    }
 
-    g.appendChild(circle);
-    if (text.textContent) g.appendChild(text);
+    g.insertBefore(circle, g.firstChild);
 
     // 클릭/탭: 말풍선 표시
     g.addEventListener('click', (ev) => {
@@ -260,7 +289,7 @@
       showTooltipAt(node);
     }, { passive: true });
 
-    // 모바일에서 click이 씹히는 기기 대비: touchend도 추가
+    // 모바일 일부 기기 click 씹힘 대비
     g.addEventListener('touchend', (ev) => {
       ev.preventDefault();
       ev.stopPropagation();
@@ -281,9 +310,9 @@
     });
   }
 
-  // 배경(빈 곳) 클릭하면 말풍선 닫기
-  document.getElementById('svg').addEventListener('click', () => hideTooltip(), { passive:true });
-  document.getElementById('svg').addEventListener('touchend', (e) => { /* 빈곳 탭 닫기 */ hideTooltip(); }, { passive:true });
+  // 빈 곳 탭/클릭하면 닫기
+  svg.addEventListener('click', () => hideTooltip(), { passive:true });
+  svg.addEventListener('touchend', () => hideTooltip(), { passive:true });
 
   document.getElementById('btnFit').addEventListener('click', () => { hideTooltip(); forceFitCenter(); });
   document.getElementById('btnCloseTip').addEventListener('click', () => hideTooltip());
@@ -301,7 +330,6 @@
 
     document.getElementById('count').textContent = `노드: ${nodes.length}`;
 
-    // 렌더
     pinsEl.innerHTML = '';
     for (const n of nodes){
       if (typeof n.x !== 'number' || typeof n.y !== 'number') continue;
