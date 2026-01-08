@@ -2,323 +2,350 @@
 <html lang="ko">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Tree Planner (Read-only)</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>Wizardry Nodes (Read-only)</title>
   <style>
-    html,body{height:100%;min-height:100vh;margin:0;background:#111;color:#eee;font-family:system-ui}
-    #wrap{display:flex;height:100vh}
-    #viewer{flex:1;position:relative;overflow:hidden}
-    #side{width:280px;border-left:1px solid #2a2a2a;padding:12px;box-sizing:border-box;overflow:auto}
-    .row{display:flex;align-items:center;gap:8px;margin:8px 0}
-    .hint{font-size:12px;opacity:.75;line-height:1.4}
-    hr{border:0;border-top:1px solid #2a2a2a;margin:12px 0}
+    :root{
+      --bg:#0f0f12;
+      --panel:#111118;
+      --line:#2a2a33;
+      --text:#e9e9ef;
+      --muted:#a7a7b7;
+      --accent:#5b8cff;
+      --radius:14px;
+    }
+    html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;}
+    #wrap{height:100%;display:flex;flex-direction:column;}
+    #viewer{position:relative;flex:1;min-height:0;overflow:hidden;background:#000;}
+    #svg{width:100%;height:100%;display:block;touch-action:none;} /* let svg-pan-zoom handle */
 
-    /* SVG 핀 */
+    /* Floating button to open panel (mobile-friendly) */
+    #openPanel{
+      position:absolute;right:12px;top:12px;z-index:30;
+      background:rgba(20,20,26,.85);
+      border:1px solid rgba(255,255,255,.12);
+      color:var(--text);
+      padding:10px 12px;border-radius:999px;
+      font-weight:700;font-size:13px;
+      backdrop-filter: blur(8px);
+    }
+    #openPanel:active{transform:translateY(1px);}
+
+    /* Bottom drawer panel */
+    #panel{
+      position:fixed;
+      left:0; right:0; bottom:0;
+      z-index:40;
+      background:rgba(17,17,24,.92);
+      border-top:1px solid rgba(255,255,255,.10);
+      backdrop-filter: blur(10px);
+      border-top-left-radius: var(--radius);
+      border-top-right-radius: var(--radius);
+      box-shadow: 0 -10px 30px rgba(0,0,0,.35);
+      max-height: 65vh;
+      transform: translateY(calc(100% - 56px));
+      transition: transform .22s ease;
+      padding-bottom: env(safe-area-inset-bottom);
+    }
+    #panel.open{ transform: translateY(0); }
+    #panelHeader{
+      height:56px;display:flex;align-items:center;justify-content:space-between;
+      padding:0 14px;box-sizing:border-box;
+      user-select:none;
+    }
+    #grab{
+      width:48px;height:5px;border-radius:999px;background:rgba(255,255,255,.25);
+      margin:8px auto 0;
+    }
+    #panelTitle{font-weight:800;font-size:14px;}
+    #closePanel{
+      background:transparent;border:0;color:var(--text);
+      font-size:22px;line-height:1; padding:6px 10px; border-radius:10px;
+    }
+    #closePanel:active{background:rgba(255,255,255,.08);}
+    #panelBody{padding:8px 16px 16px;}
+    .row{display:flex;align-items:center;gap:10px;margin:10px 0;}
+    .muted{color:var(--muted);font-size:12px;line-height:1.4;}
+    .pill{
+      display:inline-flex;align-items:center;gap:8px;
+      padding:8px 10px;border-radius:999px;
+      border:1px solid rgba(255,255,255,.12);
+      background:rgba(0,0,0,.18);
+      font-size:12px;
+    }
+
+    /* Tooltip bubble */
+    #tip{
+      position:absolute;
+      z-index:35;
+      max-width:min(320px, calc(100vw - 24px));
+      background:rgba(15,15,20,.94);
+      border:1px solid rgba(255,255,255,.14);
+      border-radius:14px;
+      padding:10px 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.4);
+      backdrop-filter: blur(10px);
+      display:none;
+    }
+    #tip h4{margin:0 0 6px 0;font-size:14px;}
+    #tip p{margin:0;font-size:12px;color:var(--muted);white-space:pre-wrap;}
+    #tipClose{
+      position:absolute;right:8px;top:6px;
+      border:0;background:transparent;color:var(--muted);
+      font-size:18px;line-height:1;padding:4px 6px;border-radius:10px;
+    }
+    #tipClose:active{background:rgba(255,255,255,.08);}
+
+    /* SVG pins */
     .pin{cursor:pointer}
     .r{fill:#d63a3a} .b{fill:#2f6bff} .g{fill:#20a56b}
+    .ring{stroke:rgba(255,255,255,.92);stroke-width:2}
     .num{fill:#fff;font-weight:800;font-size:14px;pointer-events:none}
-    .pinHidden{display:none}
-
-    /* 말풍선 */
-    #bubble{
-      position:absolute;
-      min-width: 220px;
-      max-width: 320px;
-      background:#0f0f12;
-      border:1px solid #2b2b38;
-      border-radius:14px;
-      padding:10px;
-      box-shadow:0 10px 30px rgba(0,0,0,.45);
-      display:none;
-      z-index: 30;
-    }
-    #bubbleHeader{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
-    #bubbleTitle{font-weight:800}
-    #bubbleClose{
-      border:0;background:transparent;color:#fff;font-size:18px;cursor:pointer;line-height:1;
-      opacity:.85;
-    }
-    #bubbleClose:hover{opacity:1}
-    #bubbleDesc{white-space:pre-wrap;line-height:1.35;font-size:13px;opacity:.95}
-    #bubbleLink{display:none;margin-top:8px;font-size:12px}
-    #bubbleLink a{color:#9ecbff}
-  
-    /* 모바일 대응 */
-    #viewer svg{width:100%;height:100%;display:block}
-    @media (max-width: 768px){
-      #wrap{flex-direction:column;height:100vh}
-      #viewer{flex:none;height:70vh;min-height:320px}
-      #side{width:100%;border-left:none;border-top:1px solid #2a2a2a}
-    }
-
+    .hidden{display:none}
   </style>
 </head>
 <body>
 <div id="wrap">
   <div id="viewer">
-    <svg id="svg" width="100%" height="100%" viewBox="0 0 2996 2832">
-      <image id="bg" href="tree.png?v=2" x="0" y="0" width="2996" height="2832"></image>
+    <button id="openPanel" type="button">필터/정보</button>
+    <div id="tip" role="dialog" aria-label="노드 정보">
+      <button id="tipClose" type="button" aria-label="닫기">×</button>
+      <h4 id="tipTitle"></h4>
+      <p id="tipBody"></p>
+    </div>
+
+    <svg id="svg" viewBox="0 0 2996 2832" xmlns="http://www.w3.org/2000/svg">
+      <image id="bg" href="tree.png" x="0" y="0" width="2996" height="2832" />
       <g id="pins"></g>
     </svg>
-
-    <div id="bubble" aria-hidden="true">
-      <div id="bubbleHeader">
-        <div id="bubbleTitle"></div>
-        <button id="bubbleClose" type="button" title="닫기">×</button>
-      </div>
-      <div id="bubbleDesc"></div>
-      <div id="bubbleLink"></div>
-    </div>
   </div>
 
-  <aside id="side">
-    <div class="row"><b id="counter">노드: 0</b></div>
-
-    <hr/>
-
-    <div><b>필터</b></div>
-    <div class="row"><input type="checkbox" id="f-r" checked><label for="f-r">빨강</label></div>
-    <div class="row"><input type="checkbox" id="f-b" checked><label for="f-b">파랑</label></div>
-    <div class="row"><input type="checkbox" id="f-g" checked><label for="f-g">초록</label></div>
-
-    <hr/>
-
-    <div><b>핀 크기</b></div>
-    <div class="row">
-      <input type="range" id="pinSize" min="10" max="80" step="1" style="width:180px" />
-      <span id="pinSizeVal" style="width:40px;text-align:right;"></span>
+  <div id="panel" aria-label="옵션 패널">
+    <div id="grab"></div>
+    <div id="panelHeader">
+      <div id="panelTitle">노드: <span id="nodeCount">0</span></div>
+      <button id="closePanel" type="button" aria-label="패널 닫기">⌄</button>
     </div>
-
-    <hr/>
-
-    <div class="hint">
-      • 이 페이지는 <b>읽기 전용</b>이라 노드 추가/편집/저장은 불가.<br/>
-      • 노드 데이터는 같은 폴더의 <b>nodes.json</b>에서 읽어옵니다.<br/>
-      • nodes.json이 없으면(또는 로컬에서 file://로 열면) 기존 에디터가 저장한 localStorage 데이터를 '읽기만' 시도합니다.
+    <div id="panelBody">
+      <div class="row">
+        <span class="pill">✅ 빨강 <input type="checkbox" id="f-r" checked></span>
+        <span class="pill">✅ 파랑 <input type="checkbox" id="f-b" checked></span>
+        <span class="pill">✅ 초록 <input type="checkbox" id="f-g" checked></span>
+      </div>
+      <div class="muted">
+        • 노드 누르면 말풍선으로 제목/상세가 뜹니다.<br>
+        • 화면 드래그: 이동 / 핀치: 확대·축소<br>
+        • 말풍선이 거슬리면 X로 닫거나, 빈 곳을 눌러 닫으세요.
+      </div>
     </div>
-  </aside>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom@3.6.1/dist/svg-pan-zoom.min.js"></script>
-
 <script>
-window.addEventListener('DOMContentLoaded', async () => {
-  const svg = document.getElementById("svg");
-  const bg  = document.getElementById("bg");
-  const pins = document.getElementById("pins");
-  const viewer = document.getElementById("viewer");
+(() => {
+  const IMG_W = 2996, IMG_H = 2832;
+  const svg = document.getElementById('svg');
+  const pinsLayer = document.getElementById('pins');
 
-  const bubble = document.getElementById("bubble");
-  const bubbleTitle = document.getElementById("bubbleTitle");
-  const bubbleDesc = document.getElementById("bubbleDesc");
-  const bubbleClose = document.getElementById("bubbleClose");
-  const bubbleLink = document.getElementById("bubbleLink");
-
-  // --- 이미지 크기 자동 감지 ---
-  function applyImageSize(w, h){
-    svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
-    bg.setAttribute("width", w);
-    bg.setAttribute("height", h);
-  }
-
-  // 로드된 이미지 크기 감지(가능하면 naturalWidth/Height 사용)
-  async function detectImageSize(){
-    return await new Promise((resolve) => {
-      const probe = new Image();
-      const href = bg.getAttribute("href") || (bg.href && bg.href.baseVal) || "tree.png";
-      probe.onload = () => resolve({w: probe.naturalWidth || 2048, h: probe.naturalHeight || 2048});
-      probe.onerror = () => resolve({w: 2048, h: 2048});
-      probe.src = href;
-    });
-  }
-
-  // --- 노드 로드: nodes.json -> localStorage(읽기만) -> 빈 배열 ---
-  const STORAGE_KEY_NODES = "daphne_tree_nodes_v1";
-
-  function normalizeNodes(arr){
-    if(!Array.isArray(arr)) return [];
-    return arr.map(n => ({
-      id: String(n.id ?? ""),
-      x: Number(n.x),
-      y: Number(n.y),
-      c: (n.c==="r"||n.c==="b"||n.c==="g") ? n.c : "r",
-      n: Number.isFinite(Number(n.n)) ? Number(n.n) : 1,
-      title: n.title ? String(n.title) : "",
-      desc: n.desc ? String(n.desc) : "",
-      link: n.link ? String(n.link) : ""
-    })).filter(n => n.id && Number.isFinite(n.x) && Number.isFinite(n.y));
-  }
-
-  async function loadNodes(){
-    // 1) nodes.json
-    try{
-      const res = await fetch("nodes.json", {cache:"no-store"});
-      if(res.ok){
-        const data = await res.json();
-        const nodes = normalizeNodes(data);
-        if(nodes.length) return nodes;
-      }
-    }catch(e){}
-
-    // 2) localStorage (읽기만)
-    try{
-      const raw = localStorage.getItem(STORAGE_KEY_NODES);
-      if(raw){
-        const arr = JSON.parse(raw);
-        const nodes = normalizeNodes(arr);
-        if(nodes.length) return nodes;
-      }
-    }catch(e){}
-
-    return [];
-  }
-
-  // --- UI: 핀 크기 ---
-  const PIN_RADIUS_KEY = "planner_pin_radius";
-  let pinRadius = Number(localStorage.getItem(PIN_RADIUS_KEY) || 32);
-  const pinSize = document.getElementById("pinSize");
-  const pinSizeVal = document.getElementById("pinSizeVal");
-  pinSize.value = String(pinRadius);
-  pinSizeVal.textContent = String(pinRadius);
-
-  pinSize.addEventListener("input", () => {
-    pinRadius = Number(pinSize.value);
-    pinSizeVal.textContent = String(pinRadius);
-    // 읽기전용이지만, 핀 크기 정도는 "내 화면" 편의라 저장 허용
-    try{ localStorage.setItem(PIN_RADIUS_KEY, String(pinRadius)); }catch(e){}
-    render();
+  // Panel controls
+  const panel = document.getElementById('panel');
+  const openPanelBtn = document.getElementById('openPanel');
+  const closePanelBtn = document.getElementById('closePanel');
+  openPanelBtn.addEventListener('click', () => panel.classList.toggle('open'));
+  closePanelBtn.addEventListener('click', () => panel.classList.toggle('open'));
+  // tap grab area to toggle
+  document.getElementById('panelHeader').addEventListener('click', (e) => {
+    if (e.target === closePanelBtn) return;
+    panel.classList.toggle('open');
   });
 
-  // --- 말풍선 ---
-  function hideBubble(){
-    bubble.style.display = "none";
-    bubble.setAttribute("aria-hidden", "true");
-  }
-
-  function showBubbleForNode(node){
-    bubbleTitle.textContent = node.title || node.id;
-    bubbleDesc.textContent = node.desc || "";
-
-    if(node.link){
-      bubbleLink.style.display = "block";
-      bubbleLink.innerHTML = `<a href="${node.link}" target="_blank" rel="noopener noreferrer">관련 링크 열기</a>`;
-    }else{
-      bubbleLink.style.display = "none";
-      bubbleLink.innerHTML = "";
+  // Tooltip
+  const tip = document.getElementById('tip');
+  const tipTitle = document.getElementById('tipTitle');
+  const tipBody = document.getElementById('tipBody');
+  const tipClose = document.getElementById('tipClose');
+  function hideTip(){ tip.style.display='none'; }
+  tipClose.addEventListener('click', hideTip);
+  // click outside tooltip to close (but not when clicking panel)
+  document.getElementById('viewer').addEventListener('pointerdown', (e) => {
+    if (tip.style.display !== 'none') {
+      const inside = tip.contains(e.target);
+      const onPanelBtn = openPanelBtn.contains(e.target);
+      if (!inside && !onPanelBtn) hideTip();
     }
+  }, {capture:true});
 
-    // 노드 좌표를 화면 좌표로 변환해서 말풍선 위치 잡기
-    const viewport = svg.querySelector(".svg-pan-zoom_viewport") || svg;
-    const pt = svg.createSVGPoint();
-    pt.x = node.x; pt.y = node.y;
-    const screen = pt.matrixTransform(viewport.getScreenCTM());
-    const rect = viewer.getBoundingClientRect();
-
-    // viewer 기준 좌표
-    let left = (screen.x - rect.left) + 14;
-    let top  = (screen.y - rect.top) + 14;
-
-    // 화면 밖으로 나가면 보정
-    const bw = 320;
-    const bh = 180;
-    left = Math.max(8, Math.min(left, rect.width - bw - 8));
-    top  = Math.max(8, Math.min(top, rect.height - bh - 8));
-
-    bubble.style.left = left + "px";
-    bubble.style.top  = top + "px";
-    bubble.style.display = "block";
-    bubble.setAttribute("aria-hidden", "false");
+  // Load nodes
+  let NODES = [];
+  async function loadNodes(){
+    try{
+      const res = await fetch('nodes.json', {cache: 'no-store'});
+      if(!res.ok) throw new Error('nodes.json fetch failed: ' + res.status);
+      const data = await res.json();
+      if(Array.isArray(data)) NODES = data;
+      else if(Array.isArray(data.nodes)) NODES = data.nodes;
+      else NODES = [];
+    }catch(err){
+      console.error(err);
+      NODES = [];
+    }
+    document.getElementById('nodeCount').textContent = String(NODES.length);
   }
 
-  bubbleClose.addEventListener("click", hideBubble);
-
-  // --- 필터 ---
   function filters(){
     return {
-      r: document.getElementById("f-r").checked,
-      b: document.getElementById("f-b").checked,
-      g: document.getElementById("f-g").checked,
+      r: document.getElementById('f-r').checked,
+      b: document.getElementById('f-b').checked,
+      g: document.getElementById('f-g').checked
     };
   }
-  ["f-r","f-b","f-g"].forEach(id => {
-    document.getElementById(id).addEventListener("change", () => { render(); hideBubble(); });
+
+  function makePin(node){
+    const g = document.createElementNS('http://www.w3.org/2000/svg','g');
+    g.classList.add('pin');
+    g.dataset.c = node.c || 'r';
+
+    const r = node.radius ?? 18;
+    const circle = document.createElementNS('http://www.w3.org/2000/svg','circle');
+    circle.setAttribute('cx', node.x);
+    circle.setAttribute('cy', node.y);
+    circle.setAttribute('r', r);
+    circle.classList.add(node.c || 'r');
+    circle.classList.add('ring');
+
+    const text = document.createElementNS('http://www.w3.org/2000/svg','text');
+    text.setAttribute('x', node.x);
+    text.setAttribute('y', node.y + 5);
+    text.setAttribute('text-anchor', 'middle');
+    text.classList.add('num');
+    text.textContent = (node.n ?? '');
+
+    g.appendChild(circle);
+    if ((node.n ?? '') !== '') g.appendChild(text);
+
+    g.addEventListener('click', (ev) => {
+      ev.stopPropagation();
+      showTipForNode(node);
+    });
+
+    return g;
+  }
+
+  function applyFilterToElement(el, f){
+    const c = el.dataset.c || 'r';
+    const show = !!f[c];
+    el.classList.toggle('hidden', !show);
+  }
+
+  function renderPins(){
+    pinsLayer.innerHTML = '';
+    const f = filters();
+    for(const node of NODES){
+      const el = makePin(node);
+      applyFilterToElement(el, f);
+      pinsLayer.appendChild(el);
+    }
+  }
+
+  ['f-r','f-b','f-g'].forEach(id => {
+    document.getElementById(id).addEventListener('change', () => {
+      const f = filters();
+      [...pinsLayer.children].forEach(el => applyFilterToElement(el, f));
+    });
   });
 
-  // --- 렌더 ---
-  let NODES = [];
-
-  function updateCounter(){
-    document.getElementById("counter").textContent = `노드: ${NODES.length}`;
-  }
-
-  function render(){
-    const f = filters();
-    pins.innerHTML = "";
-
-    for(const node of NODES){
-      const g = document.createElementNS("http://www.w3.org/2000/svg","g");
-      g.classList.add("pin");
-      g.dataset.id = node.id;
-      g.dataset.c = node.c;
-      if(!f[node.c]) g.classList.add("pinHidden");
-
-      const circle = document.createElementNS("http://www.w3.org/2000/svg","circle");
-      circle.setAttribute("cx", node.x);
-      circle.setAttribute("cy", node.y);
-      circle.setAttribute("r", pinRadius);
-      circle.classList.add(node.c);
-
-      const text = document.createElementNS("http://www.w3.org/2000/svg","text");
-      text.setAttribute("x", node.x);
-      text.setAttribute("y", node.y + 5);
-      text.setAttribute("text-anchor","middle");
-      text.classList.add("num");
-      text.textContent = node.n;
-
-      // 접근성/툴팁용 title
-      if(node.title){
-        const t = document.createElementNS("http://www.w3.org/2000/svg","title");
-        t.textContent = node.title;
-        g.appendChild(t);
-      }
-
-      g.appendChild(circle);
-      g.appendChild(text);
-
-      g.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        showBubbleForNode(node);
-      });
-
-      pins.appendChild(g);
-    }
-
-    updateCounter();
-  }
-
-  // 배경 클릭하면 말풍선 닫기
-  svg.addEventListener("click", () => hideBubble());
-
-  // 줌/패닝: 더블클릭 확대 OFF + 줌/패닝 중 말풍선 닫기
-  const panZoom = svgPanZoom("#svg", {
+  // svg-pan-zoom init
+  const panZoom = svgPanZoom('#svg', {
     zoomEnabled: true,
-    controlIconsEnabled: true,
+    panEnabled: true,
+    controlIconsEnabled: false,
     fit: true,
     center: true,
-    onPan: hideBubble,
-    onZoom: hideBubble,
-    minZoom: 0.3,
-    maxZoom: 10,
-    dblClickZoomEnabled: false
+    minZoom: 0.2,
+    maxZoom: 20,
+    dblClickZoomEnabled: false,
+    preventMouseEventsDefault: true
   });
 
-  // nodes / image init
-  const sz = await detectImageSize();
-  applyImageSize(sz.w, sz.h);
+  // IMPORTANT: on mobile, initial fit/center sometimes doesn't apply until layout is stable
+  function hardFit(){
+    try{
+      panZoom.resize();
+      panZoom.fit();
+      panZoom.center();
+    }catch(e){}
+  }
+  window.addEventListener('resize', () => {
+    hardFit();
+    hideTip();
+  });
 
-  NODES = await loadNodes();
-  render();
-});
+  // Convert SVG point -> screen point for tooltip placement
+  function svgToScreenPoint(x, y){
+    const pt = svg.createSVGPoint();
+    pt.x = x; pt.y = y;
+    // Use current transformation matrix of SVG element
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return {x: 12, y: 12};
+    const sp = pt.matrixTransform(ctm);
+    return {x: sp.x, y: sp.y};
+  }
+
+  function showTipAtScreen(x, y, title, body){
+    tipTitle.textContent = title || '';
+    tipBody.textContent = body || '';
+    tip.style.display = 'block';
+
+    // position with clamp
+    const pad = 12;
+    const vw = window.innerWidth, vh = window.innerHeight;
+    // measure after display
+    const rect = tip.getBoundingClientRect();
+    let left = x + 10;
+    let top  = y - rect.height - 10;
+
+    // if above goes off, place below
+    if (top < pad) top = y + 10;
+
+    // clamp horizontally
+    if (left + rect.width > vw - pad) left = vw - pad - rect.width;
+    if (left < pad) left = pad;
+
+    // clamp vertically (avoid panel peek area)
+    const panelPeek = 64; // top portion of panel visible even when closed
+    const maxTop = vh - panelPeek - rect.height - pad;
+    if (top > maxTop) top = maxTop;
+
+    tip.style.left = left + 'px';
+    tip.style.top = top + 'px';
+  }
+
+  function showTipForNode(node){
+    const title = node.name || node.title || '';
+    const body  = node.desc || node.detail || node.description || '';
+    const sp = svgToScreenPoint(node.x, node.y);
+    showTipAtScreen(sp.x, sp.y, title, body);
+  }
+
+  // Close tooltip when panning/zooming
+  svg.addEventListener('wheel', hideTip, {passive:true});
+  svg.addEventListener('touchstart', hideTip, {passive:true});
+  svg.addEventListener('pointerdown', (e) => {
+    // if user starts panning on empty background, close tooltip
+    if (e.target && e.target.id === 'bg') hideTip();
+  });
+
+  // Boot
+  async function boot(){
+    await loadNodes();
+    renderPins();
+    // Wait a tick for image/layout
+    setTimeout(hardFit, 50);
+    setTimeout(hardFit, 250);
+  }
+  window.addEventListener('load', boot);
+})();
 </script>
 </body>
 </html>
